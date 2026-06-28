@@ -1,0 +1,19 @@
+# Google Authentication Session (Contains sensitive credentials, cookies, and tokens)
+.playwright_session/
+
+# Python Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Python caching
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Diagnostic and log files
+*.log
+*.png
+.pytest_cache/

@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Dict, List, Any
 
 from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
@@ -193,6 +193,50 @@ async def reconnect_browser():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to trigger reconnect: {e}"
         )
+
+# Reset Conversation Thread Endpoint
+@app.post("/api/chat/reset")
+async def reset_chat():
+    if not manager.is_connected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Browser session is not connected."
+        )
+    try:
+        await manager.new_chat()
+        return {"status": "New conversation thread initialized successfully."}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset conversation thread: {e}"
+        )
+
+# Streaming Chat Endpoint (Server-Sent Events / Chunked)
+@app.post("/api/chat/stream")
+async def chat_stream_endpoint(payload: ChatRequest):
+    if not manager.is_connected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Browser session is not connected."
+        )
+
+    async def event_generator():
+        start_time = time.time()
+        full_text = ""
+        try:
+            async for chunk in manager.send_prompt_stream(payload.prompt, payload.timeout_sec):
+                full_text += chunk
+                yield f"data: {chunk}\n\n"
+            elapsed_ms = (time.time() - start_time) * 1000
+            add_log(payload.prompt, full_text, elapsed_ms, "Success")
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            elapsed_ms = (time.time() - start_time) * 1000
+            add_log(payload.prompt, str(e), elapsed_ms, "System Error")
+            yield f"data: [ERROR: {str(e)}]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 
 if __name__ == "__main__":
     import uvicorn

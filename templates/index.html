@@ -513,7 +513,12 @@
             <!-- Right Column: Interactive Test Playground -->
             <div class="right-col">
                 <div class="card" style="height: calc(100% - 25px);">
-                    <div class="card-title">Prompt Playground</div>
+                    <div class="card-title">
+                        <span>Prompt Playground</span>
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.75rem;" onclick="resetThread()" id="reset-thread-btn">
+                            New Thread
+                        </button>
+                    </div>
                     <div class="playground-container">
                         <div class="chat-history" id="chat-history">
                             <div class="chat-bubble system">Welcome. Type a prompt below to send a diagnostic API request through the automated Gemini browser context.</div>
@@ -586,6 +591,20 @@ response = requests.post(url, json=payload)
 data = response.json()
 print("Response:", data["response"])
 print("Latency:", data["latency_ms"], "ms")</code></pre>
+            </div>
+
+            <h4 style="font-size: 0.95rem; margin-top: 20px; font-weight: 700;">3. Reset Conversation Thread</h4>
+            <div class="code-block">
+                <button onclick="copyCode(this)">Copy</button>
+                <code id="code-reset">curl -X POST http://localhost:8000/api/chat/reset</code>
+            </div>
+
+            <h4 style="font-size: 0.95rem; margin-top: 20px; font-weight: 700;">4. Real-time Streaming (SSE)</h4>
+            <div class="code-block">
+                <button onclick="copyCode(this)">Copy</button>
+                <code id="code-stream">curl -N -X POST http://localhost:8000/api/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Tell me a short joke."}'</code>
             </div>
         </div>
     </div>
@@ -693,6 +712,28 @@ print("Latency:", data["latency_ms"], "ms")</code></pre>
                 alert("Reconnect trigger failed: " + err);
                 btn.disabled = false;
                 btn.textContent = "Reconnect Browser";
+            }
+        }
+
+        async function resetThread() {
+            const btn = document.getElementById("reset-thread-btn");
+            btn.disabled = true;
+            btn.textContent = "Resetting...";
+            try {
+                const res = await fetch("/api/chat/reset", { method: "POST" });
+                const data = await res.json();
+                if (res.ok) {
+                    const history = document.getElementById("chat-history");
+                    history.innerHTML = `<div class="chat-bubble system">Conversation thread reset. Fresh chat started.</div>`;
+                    refreshScreenshot();
+                } else {
+                    alert("Reset failed: " + (data.detail || "Unknown error"));
+                }
+            } catch (err) {
+                alert("Reset failed: " + err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "New Thread";
             }
         }
 

@@ -27,6 +27,7 @@ class GeminiSessionManager:
         self.SEND_BUTTON_SELECTOR = 'button[aria-label*="Send" i], button[aria-label*="send" i], button:has-text("Send"), button.send-button'
         self.STOP_BUTTON_SELECTOR = 'button[aria-label*="Stop" i], button[aria-label*="stop" i]'
         self.MESSAGE_SELECTORS = ['message-content', '[class*="message-content"]', '.message-content', 'article']
+        self.NEW_CHAT_SELECTOR = 'a[href*="/app"], button[aria-label*="New chat" i], button[aria-label*="Reset" i], [data-test-id="new-chat-button"]'
 
     async def start(self):
         """Launches the persistent Playwright browser context."""
@@ -239,6 +240,108 @@ class GeminiSessionManager:
             self.status = "Connected & Ready"
             return last_text
 
+    async def new_chat(self) -> bool:
+        """Resets the conversation context by navigating to a fresh chat thread."""
+        async with self.lock:
+            self.last_activity = datetime.now()
+            await self.check_and_recover()
+            
+            try:
+                self.status = "Resetting conversation..."
+                # Try clicking new chat button if available, otherwise navigate to /app
+                new_btn = self.page.locator(self.NEW_CHAT_SELECTOR).first
+                if await new_btn.is_visible():
+                    await new_btn.click()
+                    await asyncio.sleep(1.0)
+                else:
+                    await self.page.goto("https://gemini.google.com/app", timeout=30000)
+                
+                await self.verify_authentication()
+                self.status = "Connected & Ready"
+                print("[INFO] Started new chat thread successfully.")
+                return True
+            except Exception as e:
+                print(f"[ERROR] Failed to reset chat thread: {e}")
+                self.status = "Connected & Ready"
+                raise e
+
+    async def send_prompt_stream(self, prompt_text: str, timeout_sec: int = 90):
+        """Yields streaming response text tokens asynchronously as they stabilize."""
+        async with self.lock:
+            self.last_activity = datetime.now()
+            await self.check_and_recover()
+            await self.verify_authentication()
+            
+            initial_count = 0
+            for selector in self.MESSAGE_SELECTORS:
+                cnt = await self.page.locator(selector).count()
+                if cnt > initial_count:
+                    initial_count = cnt
+                    
+            self.status = "Sending prompt..."
+            input_box = self.page.locator(self.INPUT_SELECTOR).first
+            await input_box.focus()
+            await input_box.fill(prompt_text)
+            await asyncio.sleep(0.2)
+            
+            sent = False
+            send_btn = self.page.locator(self.SEND_BUTTON_SELECTOR).first
+            if await send_btn.is_visible() and await send_btn.is_enabled():
+                try:
+                    await send_btn.click()
+                    sent = True
+                except Exception:
+                    pass
+            if not sent:
+                await input_box.press("Enter")
+                
+            self.status = "Generating response..."
+            
+            target_locator = None
+            for _ in range(20):
+                for selector in self.MESSAGE_SELECTORS:
+                    cnt = await self.page.locator(selector).count()
+                    if cnt > initial_count:
+                        target_locator = self.page.locator(selector).nth(initial_count)
+                        break
+                if target_locator:
+                    break
+                await asyncio.sleep(0.5)
+                
+            if not target_locator:
+                self.status = "Error: Timeout"
+                raise TimeoutError("Timeout waiting for Gemini to start responding.")
+                
+            last_text = ""
+            stable_count = 0
+            check_interval = 0.4
+            max_checks = int(timeout_sec / check_interval)
+            
+            for i in range(max_checks):
+                current_text = await target_locator.inner_text()
+                current_text = current_text.strip()
+                
+                stop_btn = self.page.locator(self.STOP_BUTTON_SELECTOR).first
+                stop_visible = await stop_btn.is_visible() if stop_btn else False
+                
+                if len(current_text) > len(last_text):
+                    delta = current_text[len(last_text):]
+                    yield delta
+                    stable_count = 0
+                elif len(current_text) > 0 and current_text == last_text:
+                    stable_count += 1
+                else:
+                    stable_count = 0
+                    
+                last_text = current_text
+                
+                if len(current_text) > 0 and stable_count >= 3 and not stop_visible:
+                    break
+                    
+                await asyncio.sleep(check_interval)
+                
+            self.status = "Connected & Ready"
+
     async def take_screenshot_base64(self) -> str:
         """Captures a PNG screenshot of the current page and returns it as a Base64 string."""
         if not self.page or self.page.is_closed():
@@ -249,3 +352,4 @@ class GeminiSessionManager:
         except Exception as e:
             print(f"[WARNING] Failed to capture screenshot: {e}")
             return ""
+

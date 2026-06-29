@@ -14,10 +14,12 @@ A local REST API server that wraps the web interface of Google Gemini (`gemini.g
   - [Step 3: Serve the API](#step-3-serve-the-api)
 - [REST API Reference](#rest-api-reference)
   - [1. Chat Generation](#1-chat-generation)
-  - [2. System Status](#2-system-status)
-  - [3. Browser Screenshot](#3-browser-screenshot)
-  - [4. Execution Logs](#4-execution-logs)
-  - [5. Restart Browser](#5-restart-browser)
+  - [2. Streaming Chat Generation](#2-streaming-chat-generation)
+  - [3. Reset Conversation Thread](#3-reset-conversation-thread)
+  - [4. System Status](#4-system-status)
+  - [5. Browser Screenshot](#5-browser-screenshot)
+  - [6. Execution Logs](#6-execution-logs)
+  - [7. Restart Browser](#7-restart-browser)
 - [Administrative Dashboard](#administrative-dashboard)
 - [Integration Examples](#integration-examples)
   - [Curl (CLI)](#curl-cli)
@@ -167,7 +169,48 @@ Sends a text prompt to Gemini, waits for completion, and returns the response.
 
 ---
 
-### 2. System Status
+### 2. Streaming Chat Generation
+
+Streams text generation deltas in real-time as Server-Sent Events (SSE).
+
+- **URL**: `/api/chat/stream`
+- **Method**: `POST`
+- **Headers**: `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "prompt": "Tell me a short joke."
+  }
+  ```
+- **Response Format**: `text/event-stream` returning data chunks:
+  ```text
+  data: Why did the computer...
+
+  data:  go to the doctor?
+
+  data:  Because it had a virus!
+
+  data: [DONE]
+  ```
+
+---
+
+### 3. Reset Conversation Thread
+
+Clears the active conversation context in Gemini and starts a fresh chat thread.
+
+- **URL**: `/api/chat/reset`
+- **Method**: `POST`
+- **Response Schema** (`200 OK`):
+  ```json
+  {
+    "status": "New conversation thread initialized successfully."
+  }
+  ```
+
+---
+
+### 4. System Status
 
 Returns diagnostic indicators of the active browser context and historical request telemetry.
 
@@ -190,7 +233,7 @@ Returns diagnostic indicators of the active browser context and historical reque
 
 ---
 
-### 3. Browser Screenshot
+### 5. Browser Screenshot
 
 Returns the current page snapshot of the background Chromium browser. Excellent for identifying if the scraper is stuck on a CAPTCHA or pop-up.
 
@@ -205,7 +248,7 @@ Returns the current page snapshot of the background Chromium browser. Excellent 
 
 ---
 
-### 4. Execution Logs
+### 6. Execution Logs
 
 Returns the 50 most recent API calls processed by the server instance.
 
@@ -227,7 +270,7 @@ Returns the 50 most recent API calls processed by the server instance.
 
 ---
 
-### 5. Restart Browser
+### 7. Restart Browser
 
 Safely terminates the background browser context and launches a new one. Useful if the browser gets stuck or runs out of memory.
 
@@ -239,6 +282,7 @@ Safely terminates the background browser context and launches a new one. Useful 
     "status": "Reconnect command initiated."
   }
   ```
+
 
 ---
 

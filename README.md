@@ -4,6 +4,8 @@ A local REST API server that wraps the web interface of Google Gemini (`gemini.g
 
 ## Table of Contents
 
+> 📚 **Tip:** Extended documentation lives in [`docs/`](docs/index.md) with detailed sections on [architecture](docs/architecture.md), [setup](docs/setup.md), the [API reference](docs/API.md), [configuration](docs/configuration.md), and [troubleshooting](docs/troubleshooting.md).
+
 - [Motivation](#motivation)
 - [Key Features](#key-features)
 - [System Architecture](#system-architecture)

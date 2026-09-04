@@ -475,8 +475,7 @@
             <!-- Left Column: Status, Stats, Live Screenshot -->
             <div class="left-col">
                 <!-- Stats widgets -->
-                <div class="stats-grid">
-                    <div class="stat-box">
+                <div class="stats-grid">                    <div class="stat-box">
                         <div class="stat-label">Total Calls</div>
                         <div class="stat-value" id="stat-total">0</div>
                     </div>
@@ -612,7 +611,8 @@ print("Latency:", data["latency_ms"], "ms")</code></pre>
     <script>
         // Diagnostic Loop & Update Intervals
         let statsInterval, screenshotInterval, logsInterval;
-        
+
+        // fetchStatus: poll /api/status and update the status badge + stats widgets
         async function fetchStatus() {
             try {
                 const res = await fetch("/api/status");
@@ -645,6 +645,7 @@ print("Latency:", data["latency_ms"], "ms")</code></pre>
             }
         }
 
+        // refreshScreenshot: fetch the live browser page as base64 and display it
         async function refreshScreenshot() {
             try {
                 const res = await fetch("/api/screenshot");
@@ -666,6 +667,7 @@ print("Latency:", data["latency_ms"], "ms")</code></pre>
             }
         }
 
+        // fetchLogs: rebuild the request logs table from /api/logs
         async function fetchLogs() {
             try {
                 const res = await fetch("/api/logs");
@@ -694,6 +696,7 @@ print("Latency:", data["latency_ms"], "ms")</code></pre>
             }
         }
 
+        // triggerReconnect: ask the server to stop & restart its browser session
         async function triggerReconnect() {
             const btn = document.getElementById("reconnect-btn");
             btn.disabled = true;
@@ -715,6 +718,7 @@ print("Latency:", data["latency_ms"], "ms")</code></pre>
             }
         }
 
+        // resetThread: call /api/chat/reset to start a fresh conversation
         async function resetThread() {
             const btn = document.getElementById("reset-thread-btn");
             btn.disabled = true;
@@ -737,6 +741,7 @@ print("Latency:", data["latency_ms"], "ms")</code></pre>
             }
         }
 
+        // sendPlaygroundChat: submit the prompt from the input box via /api/chat
         async function sendPlaygroundChat() {
             const input = document.getElementById("chat-input");
             const prompt = input.value.strip ? input.value.strip() : input.value.trim();
@@ -800,7 +805,7 @@ print("Latency:", data["latency_ms"], "ms")</code></pre>
             }
         }
 
-        // Helper to copy text to clipboard
+        // Helper to copy code snippets to the clipboard
         function copyCode(btn) {
             const codeEl = btn.nextElementSibling.querySelector ? btn.nextElementSibling.querySelector("code") : btn.nextElementSibling;
             const text = codeEl.innerText || codeEl.textContent;
@@ -811,6 +816,7 @@ print("Latency:", data["latency_ms"], "ms")</code></pre>
             });
         }
 
+        // escapeHtml: sanitize user/response text before injecting into the DOM
         function escapeHtml(text) {
             return text
                 .replace(/&/g, "&amp;")

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web2API Pro Console</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-group">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <h1 class="title">Web2API Pro</h1>
+          <span class="subtitle">Browser Chat to High-Speed API</span>
+        </div>
+      </div>
+      <div class="badge-group">
+        <span id="bridgeBadge" class="badge badge-disconnected">Bridge: Offline</span>
+        <span id="tabBadge" class="badge badge-warning">Tab: Searching</span>
+      </div>
+    </header>
+
+    <!-- Navigation / Quick Actions -->
+    <div class="toolbar">
+      <button id="openTabBtn" class="btn btn-secondary btn-sm">
+        <span>🌐</span> Open Gemini Tab
+      </button>
+      <button id="resetChatBtn" class="btn btn-secondary btn-sm">
+        <span>🔄</span> New Chat Thread
+      </button>
+      <button id="copyCurlBtn" class="btn btn-secondary btn-sm">
+        <span>📋</span> Copy cURL
+      </button>
+    </div>
+
+    <!-- Playground Prompt Box -->
+    <div class="card">
+      <div class="card-header">
+        <label for="promptInput" class="card-title">Live Prompt Console</label>
+        <div class="format-select">
+          <select id="formatSelect">
+            <option value="openai">OpenAI JSON</option>
+            <option value="code">Code Blocks Only</option>
+            <option value="markdown">Raw Markdown</option>
+          </select>
+        </div>
+      </div>
+      <textarea id="promptInput" rows="3" placeholder="Enter prompt to execute via active Gemini session (e.g. Write an async HTTP client in Python)..."></textarea>
+      
+      <div class="action-row">
+        <div class="stats-mini" id="requestStats">
+          Total Requests: <span id="statCount">0</span>
+        </div>
+        <button id="sendBtn" class="btn btn-primary">
+          <span id="btnIcon">🚀</span> Run Prompt
+        </button>
+      </div>
+    </div>
+
+    <!-- Output Console -->
+    <div class="card output-card">
+      <div class="card-header">
+        <span class="card-title">Response Output</span>
+        <div class="output-actions">
+          <span id="latencyBadge" class="badge-mini">0.0s</span>
+          <button id="copyOutputBtn" class="btn-text" title="Copy Output">Copy</button>
+        </div>
+      </div>
+      <pre id="outputView"><code>Awaiting query... Output and extracted code blocks will appear here in structured API format.</code></pre>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Bridge endpoint: <code>http://127.0.0.1:8000/v1/chat/completions</code></span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

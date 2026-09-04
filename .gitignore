@@ -20,3 +20,7 @@ __pycache__/
 
 # Node.js dependencies (extension)
 extension/node_modules/
+
+# Extension icons are needed by manifest.json (override the *.png rule above)
+!extension/icons/
+!extension/icons/*.png

@@ -1,0 +1,19 @@
+{
+  "name": "web2api-firefox-extension",
+  "version": "2.0.0",
+  "description": "Firefox extension that converts Gemini web chat into a pro-level OpenAI-compatible API with code block and JSON extraction.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test_parser.js"
+  },
+  "keywords": [
+    "firefox-extension",
+    "web2api",
+    "gemini",
+    "openai-api",
+    "acp",
+    "code-parser"
+  ],
+  "author": "",
+  "license": "MIT"
+}

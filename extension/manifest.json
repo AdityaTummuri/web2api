@@ -1,0 +1,47 @@
+{
+  "manifest_version": 2,
+  "name": "Web2API Pro - Firefox Chat-to-API Bridge",
+  "version": "2.0.0",
+  "description": "Transforms web chat interfaces into high-performance, structured pro-tier APIs with automatic code block parsing and JSON extraction.",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "*://gemini.google.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "ws://127.0.0.1/*",
+    "ws://localhost/*"
+  ],
+  "background": {
+    "scripts": [
+      "parser.js",
+      "background.js"
+    ],
+    "persistent": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://gemini.google.com/*"
+      ],
+      "js": [
+        "parser.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_title": "Web2API Pro Console",
+    "default_icon": {
+      "48": "icons/icon-48.png",
+      "96": "icons/icon-96.png"
+    }
+  },
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  }
+}

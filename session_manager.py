@@ -1,3 +1,8 @@
+# session_manager.py - Core browser automation engine for the Gemini Web2API project.
+# This module encapsulates all interaction with gemini.google.com using Playwright:
+# launching the browser, navigating, submitting prompts, reading streamed responses,
+# self-healing on crashes, and resetting the conversation thread.
+
 import asyncio
 import os
 import base64
@@ -11,18 +16,18 @@ class SessionUnauthenticatedException(Exception):
 
 class GeminiSessionManager:
     def __init__(self, session_dir: str, headless: bool = True):
-        self.session_dir = session_dir
+        self.session_dir = session_dir  # Persistent Chromium profile (cookies/localStorage)
         self.headless = headless
         self.playwright = None
         self.context = None
         self.page = None
-        self.lock = asyncio.Lock()
+        self.lock = asyncio.Lock()  # Serializes all browser interactions (one request at a time)
         self.status = "Disconnected"
         self.is_connected = False
         self.last_error = None
         self.last_activity = None
         
-        # Selectors
+        # CSS selectors that match Gemini's web UI DOM
         self.INPUT_SELECTOR = 'div[contenteditable="true"]'
         self.SEND_BUTTON_SELECTOR = 'button[aria-label*="Send" i], button[aria-label*="send" i], button:has-text("Send"), button.send-button'
         self.STOP_BUTTON_SELECTOR = 'button[aria-label*="Stop" i], button[aria-label*="stop" i]'
@@ -53,6 +58,7 @@ class GeminiSessionManager:
             else:
                 self.page = await self.context.new_page()
                 
+            # Apply stealth patches to reduce bot-detection risk
             await stealth_async(self.page)
             
             # Navigate directly to the chat app
@@ -68,12 +74,14 @@ class GeminiSessionManager:
             print("[INFO] Playwright browser session started and verified successfully.")
             
         except SessionUnauthenticatedException as e:
+            # Not logged in - report and let the server surface this to the user
             self.is_connected = False
             self.status = "Awaiting Authentication"
             self.last_error = str(e)
             print(f"[ERROR] Session verification failed: {e}")
             raise
         except Exception as e:
+            # Any other startup failure - clean up and re-raise
             self.is_connected = False
             self.status = "Failed to Start"
             self.last_error = str(e)
@@ -121,12 +129,14 @@ class GeminiSessionManager:
         is_healthy = False
         if self.page and not self.page.is_closed():
             try:
+                # A trivial JS evaluation proves the page is alive
                 await self.page.evaluate("1 + 1")
                 is_healthy = True
             except Exception:
                 pass
                 
         if not is_healthy:
+            # Browser crashed or tab closed - restart the whole session
             print("[WARNING] Browser connection lost. Attempting recovery...")
             await self.stop()
             await self.start()
@@ -163,6 +173,7 @@ class GeminiSessionManager:
             
             # Fill the prompt text
             await input_box.fill(prompt_text)
+            # Brief pause so the UI registers the input before we click send
             await asyncio.sleep(0.2)
             
             # Look for send button and click it
@@ -187,11 +198,11 @@ class GeminiSessionManager:
             start_time = datetime.now()
             target_locator = None
             
-            for _ in range(20): # 10 seconds max wait for element creation
+            for _ in range(20): # 10 seconds max wait for element creation (20 * 0.5s)
                 for selector in self.MESSAGE_SELECTORS:
                     cnt = await self.page.locator(selector).count()
                     if cnt > initial_count:
-                        # Grab the newly created response element (nth element is 0-indexed, so it's initial_count)
+                        # Grab the newly created response element (nth index = initial_count)
                         target_locator = self.page.locator(selector).nth(initial_count)
                         break
                 if target_locator:
@@ -219,7 +230,7 @@ class GeminiSessionManager:
                 stop_btn = self.page.locator(self.STOP_BUTTON_SELECTOR).first
                 stop_visible = await stop_btn.is_visible() if stop_btn else False
                 
-                # Compare
+                # Compare with previous snapshot
                 if len(current_text) > 0 and current_text == last_text:
                     stable_count += 1
                 else:
@@ -266,7 +277,12 @@ class GeminiSessionManager:
                 raise e
 
     async def send_prompt_stream(self, prompt_text: str, timeout_sec: int = 90):
-        """Yields streaming response text tokens asynchronously as they stabilize."""
+        """Yields streaming response text tokens asynchronously as they stabilize.
+
+        Unlike send_prompt(), this does not wait for full stabilization - it
+        yields each newly-observed chunk of text so the server can forward it
+        as Server-Sent Events in real time.
+        """
         async with self.lock:
             self.last_activity = datetime.now()
             await self.check_and_recover()
@@ -284,6 +300,7 @@ class GeminiSessionManager:
             await input_box.fill(prompt_text)
             await asyncio.sleep(0.2)
             
+            # Click send button, falling back to Enter key
             sent = False
             send_btn = self.page.locator(self.SEND_BUTTON_SELECTOR).first
             if await send_btn.is_visible() and await send_btn.is_enabled():
@@ -297,6 +314,7 @@ class GeminiSessionManager:
                 
             self.status = "Generating response..."
             
+            # Wait for the new response element to appear (up to 10s)
             target_locator = None
             for _ in range(20):
                 for selector in self.MESSAGE_SELECTORS:
@@ -314,7 +332,7 @@ class GeminiSessionManager:
                 
             last_text = ""
             stable_count = 0
-            check_interval = 0.4
+            check_interval = 0.4  # poll every 400ms for streaming
             max_checks = int(timeout_sec / check_interval)
             
             for i in range(max_checks):
@@ -324,6 +342,7 @@ class GeminiSessionManager:
                 stop_btn = self.page.locator(self.STOP_BUTTON_SELECTOR).first
                 stop_visible = await stop_btn.is_visible() if stop_btn else False
                 
+                # If text grew, yield the newly appended portion (delta)
                 if len(current_text) > len(last_text):
                     delta = current_text[len(last_text):]
                     yield delta
@@ -335,6 +354,7 @@ class GeminiSessionManager:
                     
                 last_text = current_text
                 
+                # Stop when stable for 1.2s (3 * 400ms) AND stop button gone
                 if len(current_text) > 0 and stable_count >= 3 and not stop_visible:
                     break
                     

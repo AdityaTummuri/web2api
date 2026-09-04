@@ -1,3 +1,7 @@
+# server.py - FastAPI web server for the Gemini Web2API project.
+# This module exposes the HTTP API that wraps the automated Gemini browser session.
+# It handles routing, request/response validation, diagnostic logging, and startup/shutdown of the browser.
+
 import os
 import sys
 import time
@@ -18,12 +22,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 SESSION_DIR = os.path.join(BASE_DIR, ".playwright_session")
 
-# Server Config
+# Server Config (overridable via env vars; see docs/configuration.md)
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", 8000))
 HEADLESS = os.getenv("HEADLESS", "true").lower() in ("true", "1", "yes")
 
-# Initialize session manager
+# Initialize session manager (the browser automation engine)
 manager = GeminiSessionManager(session_dir=SESSION_DIR, headless=HEADLESS)
 
 # Global variables for diagnostics
@@ -43,7 +47,7 @@ async def lifespan(app: FastAPI):
         print("[WARNING] Please run './start.sh auth' to log in manually first.")
         manager.status = "Awaiting Authentication"
     else:
-        # Start browser manager asynchronously
+        # Start browser manager asynchronously (don't block server startup)
         asyncio.create_task(start_browser_background())
     yield
     # Shutdown: Safely stop browser session
@@ -51,6 +55,7 @@ async def lifespan(app: FastAPI):
     await manager.stop()
 
 async def start_browser_background():
+    # Helper: start the browser without blocking; logs failures on error
     try:
         await manager.start()
     except Exception as e:
@@ -65,7 +70,7 @@ app = FastAPI(
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-# Pydantic schemas
+# Pydantic schemas - define the shape of API request/response bodies
 class ChatRequest(BaseModel):
     prompt: str = Field(..., min_length=1, description="The prompt query to send to Gemini")
     timeout_sec: int = Field(90, ge=10, le=180, description="Max seconds to wait for generation")
@@ -75,15 +80,17 @@ class ChatResponse(BaseModel):
     latency_ms: float
     status: str
 
-# Helper to add diagnostics logs
+# Helper to add a diagnostics log entry (newest first, capped at 50)
 def add_log(prompt: str, response: str, latency_ms: float, status_str: str):
     global log_id_counter, total_requests, total_success, total_latency
     
     total_requests += 1
+    # Only successful calls count toward latency averages
     if status_str == "Success":
         total_success += 1
         total_latency += latency_ms
         
+    # Build a concise log entry with truncated prompt/response snippets
     log_entry = {
         "id": log_id_counter,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -102,11 +109,13 @@ def add_log(prompt: str, response: str, latency_ms: float, status_str: str):
 # Server Dashboard HTML route
 @app.get("/", response_class=HTMLResponse)
 async def read_dashboard(request: Request):
+    # Render the Jinja2 admin dashboard template
     return templates.TemplateResponse("index.html", {"request": request})
 
 # Active Chat API Endpoint
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(payload: ChatRequest):
+    # Reject the request if the browser session isn't ready
     if not manager.is_connected:
         # Check if browser is just booting or if it's failed
         if manager.status == "Awaiting Authentication":
@@ -122,6 +131,7 @@ async def chat_endpoint(payload: ChatRequest):
             
     start_time = time.time()
     try:
+        # Delegate to the browser automation engine
         response_text = await manager.send_prompt(
             prompt_text=payload.prompt,
             timeout_sec=payload.timeout_sec
@@ -135,6 +145,7 @@ async def chat_endpoint(payload: ChatRequest):
             status="Success"
         )
     except SessionUnauthenticatedException as e:
+        # Session was lost during the request (e.g. redirected to login)
         elapsed_ms = (time.time() - start_time) * 1000
         add_log(payload.prompt, str(e), elapsed_ms, "Authentication Error")
         raise HTTPException(
@@ -142,6 +153,7 @@ async def chat_endpoint(payload: ChatRequest):
             detail=str(e)
         )
     except Exception as e:
+        # Any other failure: timeout, browser error, DOM mismatch, etc.
         elapsed_ms = (time.time() - start_time) * 1000
         add_log(payload.prompt, str(e), elapsed_ms, "System Error")
         raise HTTPException(
@@ -152,6 +164,7 @@ async def chat_endpoint(payload: ChatRequest):
 # Get Session Status
 @app.get("/api/status")
 async def get_status():
+    # Report system health, session state, and usage stats for the dashboard
     session_exists = os.path.exists(SESSION_DIR)
     avg_latency = 0.0
     if total_success > 0:
@@ -172,17 +185,20 @@ async def get_status():
 # Get Current browser Screenshot
 @app.get("/api/screenshot")
 async def get_screenshot():
+    # Capture the live browser page as a base64 PNG for the "Live Headless View"
     screenshot_b64 = await manager.take_screenshot_base64()
     return {"screenshot": screenshot_b64}
 
 # Get diagnostic request logs
 @app.get("/api/logs")
 async def get_logs():
+    # Return the in-memory request log list for the dashboard table
     return request_logs
 
 # Quick recovery reboot endpoint
 @app.post("/api/reconnect")
 async def reconnect_browser():
+    # Stop and restart the browser session without blocking the response
     try:
         await manager.stop()
         # Start recovery task in background to avoid blocking request
@@ -197,6 +213,7 @@ async def reconnect_browser():
 # Reset Conversation Thread Endpoint
 @app.post("/api/chat/reset")
 async def reset_chat():
+    # Start a fresh conversation in the persistent Gemini thread
     if not manager.is_connected:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -214,6 +231,7 @@ async def reset_chat():
 # Streaming Chat Endpoint (Server-Sent Events / Chunked)
 @app.post("/api/chat/stream")
 async def chat_stream_endpoint(payload: ChatRequest):
+    # Same as /api/chat but yields response deltas as SSE events for real-time streaming
     if not manager.is_connected:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -224,6 +242,7 @@ async def chat_stream_endpoint(payload: ChatRequest):
         start_time = time.time()
         full_text = ""
         try:
+            # Yield each text delta as an SSE "data:" event
             async for chunk in manager.send_prompt_stream(payload.prompt, payload.timeout_sec):
                 full_text += chunk
                 yield f"data: {chunk}\n\n"

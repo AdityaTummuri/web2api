@@ -1,9 +1,7 @@
 #!/bin/bash
 
 # Web2API Startup and Manager Script
-# Implements robust environment verification and launcher utilities.
-# This is the single entry point for: setting up the environment, authenticating,
-# and serving the API. See docs/ for details.
+# Implements robust environment verification and launcher utilities using uv.
 
 set -euo pipefail
 
@@ -21,66 +19,71 @@ error() {
     echo -e "\033[1;31m[ERROR]\033[0m $1" >&2
 }
 
-# setup_env: create the virtualenv (if missing), install deps, install Chromium
+# Find uv if available
+UV_BIN="$(which uv 2>/dev/null || echo "/home/suzaykid/.local/bin/uv")"
+
+# setup_env: create virtualenv and install deps with uv
 setup_env() {
-    if [ ! -d "$VENV_DIR" ]; then
-        log "Creating virtual environment in $VENV_DIR..."
-        python3 -m venv "$VENV_DIR"
+    if [ -x "$UV_BIN" ]; then
+        log "Using uv to initialize virtual environment..."
+        "$UV_BIN" venv "$VENV_DIR"
+        "$UV_BIN" pip install -r requirements.txt
+    else
+        log "uv not found, using python3 venv..."
+        if [ ! -d "$VENV_DIR" ]; then
+            python3 -m venv "$VENV_DIR"
+        fi
+        # shellcheck disable=SC1091
+        source "$VENV_DIR/bin/activate"
+        pip install --upgrade pip
+        pip install -r requirements.txt
     fi
 
-    log "Activating virtual environment..."
-    # shellcheck disable=SC1091
-    source "$VENV_DIR/bin/activate"
-
-    log "Upgrading pip..."
-    pip install --upgrade pip
-
-    log "Installing dependencies from requirements.txt..."
-    pip install -r requirements.txt
-
-    log "Installing Playwright Chromium browser..."
-    playwright install chromium
+    # Install playwright browser if needed
+    if [ -f "$VENV_DIR/bin/playwright" ]; then
+        "$VENV_DIR/bin/playwright" install chromium || true
+    fi
 }
 
 # show_help: print usage information
 show_help() {
     echo "Web2API Management CLI"
     echo "Usage:"
-    echo "  $0 setup          - Initialize virtualenv and install dependencies"
-    echo "  $0 auth           - Launch headful browser to log in manually"
-    echo "  $0 serve          - Start the FastAPI server with administrative dashboard"
+    echo "  $0 bridge         - Start the Web2API Firefox Extension Bridge Server (OpenAI REST + WebSocket)"
+    echo "  $0 serve          - Start the Playwright Headless FastAPI server"
+    echo "  $0 setup          - Initialize virtualenv with uv and install dependencies"
+    echo "  $0 auth           - Launch headful browser to log in manually (Playwright mode)"
     echo "  $0 help           - Display this help message"
 }
 
-# ensure_setup: make sure the environment exists (auto-run setup if missing)
 ensure_setup() {
-    if [ ! -d "$VENV_DIR" ] || [ ! -f "$VENV_DIR/bin/playwright" ]; then
-        log "Environment not initialized. Running setup..."
+    if [ ! -d "$VENV_DIR" ]; then
+        log "Environment not initialized. Running setup with uv..."
         setup_env
-    else
-        # shellcheck disable=SC1091
-        source "$VENV_DIR/bin/activate"
     fi
 }
 
-# Parse the first arg as the subcommand (default: help)
 COMMAND="${1:-help}"
 
 case "$COMMAND" in
     setup)
         setup_env
-        log "Setup complete! Run '$0 auth' to log into Gemini."
+        log "Setup complete! Run '$0 bridge' for Firefox extension mode or '$0 auth' for Playwright mode."
+        ;;
+    bridge)
+        ensure_setup
+        log "Starting Web2API Firefox Extension Bridge Server on http://127.0.0.1:8000..."
+        exec "$VENV_DIR/bin/python3" bridge_server.py
+        ;;
+    serve)
+        ensure_setup
+        log "Starting Playwright FastAPI Server on http://127.0.0.1:8000..."
+        exec "$VENV_DIR/bin/python3" server.py
         ;;
     auth)
         ensure_setup
         log "Starting authentication window..."
-        python3 setup_session.py
-        ;;
-    serve)
-        ensure_setup
-        log "Starting FastAPI Server..."
-        # Run server using uvicorn
-        python3 server.py
+        exec "$VENV_DIR/bin/python3" setup_session.py
         ;;
     help|*)
         show_help

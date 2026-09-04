@@ -17,3 +17,6 @@ __pycache__/
 *.log
 *.png
 .pytest_cache/
+
+# Node.js dependencies (extension)
+extension/node_modules/

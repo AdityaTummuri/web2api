@@ -1,3 +1,8 @@
+# setup_session.py - One-time interactive authentication for Gemini Web2API.
+# Launches a visible (headful) Chromium window so the user can manually log into
+# their Google account. The resulting session (cookies, localStorage, profile) is
+# saved into .playwright_session/ and reused later by the headless server.
+
 import asyncio
 import os
 import sys
@@ -15,10 +20,10 @@ async def run_setup():
     
     async with async_playwright() as p:
         # Launch Chromium with a persistent context.
-        # This will save all cookies, local storage, and history.
+        # This will save all cookies, local storage, and history across runs.
         context = await p.chromium.launch_persistent_context(
             user_data_dir=SESSION_DIR,
-            headless=False,
+            headless=False,  # Must be visible so the user can log in manually
             viewport={"width": 1280, "height": 850},
             args=[
                 "--disable-blink-features=AutomationControlled",
@@ -41,11 +46,11 @@ async def run_setup():
         print("4. Once you see the text box ('Enter a prompt here...'), return to this terminal.")
         print("-" * 60)
         
-        # Interactive loop to check state and wait for user confirmation
+        # Interactive loop: wait for the user to confirm they finished logging in
         while True:
             response = input("\nHave you logged in successfully and see the chat input box? (y/n/exit): ").strip().lower()
             if response in ('y', 'yes'):
-                # Verify that we can find the textbox
+                # Verify that we can find the textbox before saving the session
                 try:
                     input_box = page.locator('div[contenteditable="true"]').first
                     # Wait up to 3s to verify if it's there
@@ -63,6 +68,7 @@ async def run_setup():
                 print("\nPlease complete the login in the browser window and then type 'y'.")
 
         print("Saving session data and closing browser...")
+        # Closing the persistent context persists all cookies/localStorage to disk
         await context.close()
         print("\nSession saved successfully! You can now start the server with: ./start.sh serve")
 

@@ -2,6 +2,8 @@
 
 # Web2API Startup and Manager Script
 # Implements robust environment verification and launcher utilities.
+# This is the single entry point for: setting up the environment, authenticating,
+# and serving the API. See docs/ for details.
 
 set -euo pipefail
 
@@ -19,6 +21,7 @@ error() {
     echo -e "\033[1;31m[ERROR]\033[0m $1" >&2
 }
 
+# setup_env: create the virtualenv (if missing), install deps, install Chromium
 setup_env() {
     if [ ! -d "$VENV_DIR" ]; then
         log "Creating virtual environment in $VENV_DIR..."
@@ -39,6 +42,7 @@ setup_env() {
     playwright install chromium
 }
 
+# show_help: print usage information
 show_help() {
     echo "Web2API Management CLI"
     echo "Usage:"
@@ -48,7 +52,7 @@ show_help() {
     echo "  $0 help           - Display this help message"
 }
 
-# Ensure setup occurs before running commands
+# ensure_setup: make sure the environment exists (auto-run setup if missing)
 ensure_setup() {
     if [ ! -d "$VENV_DIR" ] || [ ! -f "$VENV_DIR/bin/playwright" ]; then
         log "Environment not initialized. Running setup..."
@@ -59,6 +63,7 @@ ensure_setup() {
     fi
 }
 
+# Parse the first arg as the subcommand (default: help)
 COMMAND="${1:-help}"
 
 case "$COMMAND" in

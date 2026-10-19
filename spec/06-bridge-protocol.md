@@ -298,6 +298,7 @@ never reached the provider), at most once, on a different tab if available.
 | `RATE_LIMITED` | ext | 429 (+`Retry-After` if known) | no | Provider usage limit reached. |
 | `SELECTOR_NOT_FOUND` | ext | 502 | yes | A critical selector didn't resolve (maintainer trigger). |
 | `SELECTOR_AMBIGUOUS` | ext | 502 | yes | Scoring tie for composer. |
+| `SELECTOR_SUSPICIOUS` | ext | 502 | no | A click target matched the destructive-action deny list (`08` §4.3). Never retried. |
 | `INPUT_REJECTED` | ext | 502 | yes | All insertion strategies failed verification. |
 | `SUBMIT_FAILED` | ext | 502 | yes | Could not verify submission. |
 | `PROMPT_TOO_LONG` | bridge/ext | 400 | no | Exceeds limits. |

@@ -272,7 +272,8 @@ All are request/response with `requestId`.
 | `CONFIG_GET {providerId?}` (B→E) | `CONFIG_STATE {requestId, providers: [{id, configVersion, overrideVersion, effective, bundled, override}]}` | Read effective configs (for admin API / maintainer). |
 | `CONFIG_OVERRIDE {override}` (B→E) | `CONFIG_ACK {requestId, providerId, status: "applied"|"rejected", errors: [...], overrideVersion}` | Apply a hot fix (`05` §2.4). |
 | `CONFIG_REVERT {providerId, to: "bundled"|"previous"}` (B→E) | `CONFIG_ACK` | Undo. |
-| `HEALTH_PROBE {providerId?}` (B→E) | `HEALTH_RESULT {requestId, results: [{providerId, status, checks: {key: {found, tier, count}}, tabId}]}` | Run probes now (`04` §9.1). Never types or sends. |
+| `HEALTH_PROBE {providerId?, candidatePatch?}` (B→E) | `HEALTH_RESULT {requestId, results: [{providerId, status, checks: {key: {found, tier, count}}, tabId}]}` | Run probes now (`04` §9.1). Never types or sends. With `candidatePatch` (a merge patch, validated like an override), the probe uses effective config + patch **without persisting it** — the maintainer's dry run (`11` H6). |
+| `STREAM_SAMPLE_REQUEST {providerId}` (B→E) | `STREAM_SAMPLE_RESULT {requestId, providerId, endpointId, chunks: [string], redacted: true}` (sent when the next job on that provider completes, or `ERROR` after 10 min) | Capture one redacted raw stream for parser maintenance (`11` H4). Redaction is mandatory regardless of the `debugContentLogging` setting. Stretch goal for Phase 6. |
 | `HEALTH_REPORTS_GET {since?}` (B→E) | `HEALTH_REPORTS {requestId, reports: [...]}` | Fetch stored reports. |
 | `SNAPSHOT_REQUEST {snapshotId}` or `{providerId, capture: true}` (B→E) | `SNAPSHOT_RESULT {requestId, snapshotId, meta, html}` | Fetch a stored snapshot or capture a fresh one from an idle worker tab. |
 | `HEALTH_REPORT {report}` (E→B, unsolicited) | — | Pushed whenever a report is created. |

@@ -476,6 +476,9 @@ All require the API bearer token. All return JSON, never prompt/answer text unle
 | `DELETE /web2api/config/{id}/override?to=bundled|previous` | `CONFIG_REVERT`. |
 | `GET /web2api/jobs?limit=50` | Recent jobs: id, provider, phase, outcome code, timings, warnings. No text. |
 | `POST /web2api/jobs/{job_id}/cancel` | Cancel. |
+| `GET /web2api/jobs/{job_id}/events` | SSE stream of the job's phase changes (no text) — for MCP progress (`11` H5). Stretch. |
+| `POST /web2api/providers/{id}/probe` with body `{"candidatePatch": {...}}` | Dry-run probe (`11` H6). |
+| `POST /web2api/providers/{id}/stream-sample` | Arms a redacted stream capture for the next job (`11` H4). Stretch. |
 | `GET /web2api/threads` | Conversation map entries (provider, thread_url, turns, last_used). |
 | `DELETE /web2api/threads` | Clear the map. |
 

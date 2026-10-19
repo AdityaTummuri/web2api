@@ -9,17 +9,25 @@ Package: `bridge/` with module `web2api_bridge` (layout in `03-target-architectu
 
 ## 1. Tooling
 
-* Python ≥ 3.11. `uv` for env and lockfile.
+**Lightweight rule:** exactly **one** third-party runtime dependency: `aiohttp` (HTTP server,
+WebSocket server, SSE streaming in one library). Everything else is the standard library:
+`asyncio`, `json`, `hmac`, `secrets`, `hashlib`, `tomllib`, `logging`, `dataclasses`, `argparse`,
+`re`, `unicodedata`. Request validation is hand-written (small functions that raise
+`Web2APIError`), replacing pydantic; the OpenAI request surface is small enough that this is
+shorter and faster than a schema library, and it lets us accept "anything extra" without 422s.
+FastAPI, uvicorn, starlette, pydantic and httpx are **not** used anywhere (including tests).
+
+* Python ≥ 3.11. `uv` for env and lockfile (commit `uv.lock`).
 * `bridge/pyproject.toml`:
   ```toml
   [project]
   name = "web2api-bridge"
   version = "0.1.0"
   requires-python = ">=3.11"
-  dependencies = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "pydantic>=2.7"]
+  dependencies = ["aiohttp>=3.10,<4"]
 
-  [project.optional-dependencies]
-  dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx>=0.27"]
+  [dependency-groups]
+  dev = ["pytest>=8", "pytest-asyncio>=0.23", "pyinstaller>=6"]
 
   [project.scripts]
   web2api-bridge = "web2api_bridge.cli:main"
@@ -28,9 +36,11 @@ Package: `bridge/` with module `web2api_bridge` (layout in `03-target-architectu
   requires = ["hatchling"]
   build-backend = "hatchling.build"
   ```
-* Run: `cd bridge && uv sync --extra dev && uv run web2api-bridge`.
-* Tests: `uv run pytest`.
-* Config file parsing uses stdlib `tomllib`. No other runtime deps.
+* Run from source: `cd bridge && uv sync && uv run web2api-bridge`.
+* Tests: `uv run pytest`. Test clients use aiohttp's own client + `aiohttp.test_utils`
+  (`AioHTTPTestCase` / `aiohttp_client` fixture) and `session.ws_connect` — no extra libraries.
+* Standalone binary: see `12-product-and-distribution.md` §3.
+* Budgets (enforced in CI, `12` §2): installed size, idle RAM, startup time, binary size.
 
 ---
 
@@ -70,7 +80,19 @@ web2api-bridge [serve] [--host H] [--port P] [--log-level L]
 web2api-bridge tokens show            # prints both tokens and where they are stored
 web2api-bridge tokens rotate [--api|--pairing|--all]
 web2api-bridge status                 # GET /web2api/status using the api token; pretty print
+web2api-bridge --version              # bridge + protocol version, python or frozen
+web2api-bridge doctor [--probe]       # checklist of the whole chain (12 §6.1)
+web2api-bridge support-bundle [-o P]  # redacted zip for bug reports (12 §6.2)
+web2api-bridge service install|uninstall|status|restart   # per-user auto-start service (12 §4)
 ```
+All commands must work identically from source and from the frozen binary (`12` §3). Use `argparse`
+only (no click/typer — dependency rule).
+
+**Directories (stdlib only, no `platformdirs`):** implement `paths.py` — config dir: Linux
+`$XDG_CONFIG_HOME` or `~/.config`, macOS `~/Library/Application Support`, Windows `%APPDATA%`, each +
+`/web2api`; state dir: Linux `$XDG_STATE_HOME` or `~/.local/state`, macOS
+`~/Library/Application Support/web2api/state`, Windows `%LOCALAPPDATA%\web2api`. The `~/.config/...`
+paths used elsewhere in this spec are the Linux values. Create dirs with mode 0700 on POSIX.
 On `serve` startup print (once) a banner:
 ```
 Web2API bridge 0.1.0 listening on http://127.0.0.1:8787
@@ -85,18 +107,29 @@ Tokens: `secrets.token_urlsafe(32)` prefixed `w2a_api_` / `w2a_pair_`. Create fi
 
 ## 3. App structure (`app.py`)
 
-`create_app(settings) -> FastAPI`:
-1. Middleware order (outermost first): request-id (adds `X-Request-Id`), **host check** (`08` §3.3),
-   **bearer auth** for all HTTP routes except `GET /healthz`, access log (no bodies).
-2. No CORS middleware (`08` §3.1).
-3. Exception handlers: `Web2APIError` → OpenAI error body (§7); `RequestValidationError` → 400 with
-   OpenAI error body (`type: "invalid_request_error"`, `param` = first error location); any other
-   exception → 500 `INTERNAL_ERROR` (log the traceback).
-4. Routers: `openai_compat.chat`, `openai_compat.models`, `admin`, and the WebSocket route
-   `/ws/extension` (`hub.py`).
-5. `app.state.hub = ExtensionHub(settings)`, `app.state.conversations = ConversationStore(settings)`,
-   `app.state.router = Router(hub, settings)`.
-6. Lifespan: on shutdown close all extension sockets with 4500 and fail running jobs.
+`create_app(settings) -> aiohttp.web.Application`:
+1. `web.Application(middlewares=[...], client_max_size=5 * 1024 * 1024)`. Middleware order
+   (outermost first): request-id (adds `X-Request-Id`), **error mapper**, **host check**
+   (`08` §3.3), **bearer auth** for all HTTP routes except `GET /healthz`, access log (no bodies).
+   aiohttp middlewares are plain `@web.middleware` async functions.
+2. No CORS handling anywhere (`08` §3.1) — aiohttp adds none by default.
+3. Error mapper middleware: `Web2APIError` → OpenAI error body (§7); `web.HTTPException` from
+   aiohttp (404/405/413) → same body shape; invalid JSON or a failed hand-written validation →
+   400 `invalid_request_error` with `param` set to the offending field name; any other exception →
+   500 `INTERNAL_ERROR` (log the traceback, return a generic message).
+4. Routes registered with `app.router.add_*`: `openai_compat.chat`, `openai_compat.models`,
+   `admin`, and the WebSocket route `GET /ws/extension` (`hub.py`).
+5. `app["hub"] = ExtensionHub(settings)`, `app["conversations"] = ConversationStore(settings)`,
+   `app["router"] = Router(hub, settings)`, `app["settings"] = settings`.
+6. `app.on_shutdown`: close all extension sockets with 4500 and fail running jobs.
+7. Runner: `web.AppRunner(app, handle_signals=True)` + `web.TCPSite(host, port)`; `cli.py` owns the
+   event loop (`asyncio.run`). Handle SIGINT/SIGTERM for graceful shutdown (drain for ≤ 10 s:
+   running jobs get `JOB_CANCEL`, then sockets close). On Windows, `handle_signals` is limited —
+   rely on `KeyboardInterrupt` and the service wrapper (`12` §4).
+8. WebSocket: `ws = web.WebSocketResponse(heartbeat=None, max_msg_size=16 * 1024 * 1024)`; do the
+   Origin/Host checks **before** `await ws.prepare(request)` and return
+   `web.HTTPForbidden()` (HTTP 403) on failure; application-level close codes (4400–4500) are sent
+   with `await ws.close(code=..., message=...)` after `prepare`.
 
 ---
 
@@ -109,7 +142,7 @@ Tokens: `secrets.token_urlsafe(32)` prefixed `w2a_api_` / `w2a_pair_`. Create fi
 class Connection:
     connection_id: str
     instance_id: str
-    websocket: WebSocket
+    websocket: web.WebSocketResponse
     browser: dict
     capabilities: set[str]
     providers: dict[str, ProviderInfo]     # from PROVIDERS_UPDATE
@@ -135,11 +168,11 @@ otherwise derived from the last `JOB_PROGRESS` phase (`submitting` or later ⇒ 
 
 ### 4.2 `hub.py` — behaviour
 
-* `ws_endpoint(websocket)`: check Origin (`08` §3.2) **before** `accept()` (reject with
-  `await websocket.close(code=4403)` — Starlette sends HTTP 403 when closing before accept);
-  `accept()`; `await asyncio.wait_for(receive HELLO, 5)`; validate version/token (constant-time
-  `hmac.compare_digest`); register connection (handling duplicate `instance_id`, `06` §3.1); send
-  `WELCOME`; then loop `receive_text()` → `dispatch(frame)`.
+* `ws_endpoint(request)`: check Origin (`08` §3.2) **before** `ws.prepare()` (reject with
+  `raise web.HTTPForbidden()`); `await ws.prepare(request)`; `await asyncio.wait_for(ws.receive_str(), 5)`
+  for `HELLO`; validate version/token (constant-time `hmac.compare_digest`); register connection
+  (handling duplicate `instance_id`, `06` §3.1); send `WELCOME`; then `async for msg in ws:` →
+  handle `WSMsgType.TEXT` → `dispatch(frame)`; treat `ERROR`/`CLOSE` as disconnect.
 * `dispatch`: by `type` → `PROVIDERS_UPDATE` (update connection), `PING` (reply `PONG`), `PONG`,
   `JOB_*` (route to job), responses with `requestId` (resolve pending request future),
   `HEALTH_REPORT` (store in a ring buffer of 100, expose via admin API).
@@ -302,7 +335,8 @@ Rules, in order:
 
 ### 6.1 `POST /v1/chat/completions` — request
 
-Accepted fields (Pydantic model with `extra="allow"` so unknown fields don't 422):
+Accepted fields (parsed by a hand-written `parse_chat_request(body: dict) -> ChatRequest`
+dataclass builder in `openai_compat/schemas.py`; **unknown fields are ignored, never an error**):
 
 | Field | Handling |
 |---|---|
@@ -388,10 +422,16 @@ Errors:
   `data: [DONE]\n\n`. If partial text exists, it has already been streamed; the final chunk uses
   `finish_reason: "length"` for `GENERATION_TIMEOUT`/`GENERATION_STALLED` before the error event.
 
-Client disconnect: the generator catches `asyncio.CancelledError` (raised by Starlette when the client
-goes away) → `hub.cancel_job(job_id, "client_disconnected")` → re-raise. For non-streaming requests,
-run the job wait inside a task and poll `await request.is_disconnected()` every 1 s; on disconnect,
-cancel the job.
+Streaming is implemented with `web.StreamResponse` (`await resp.prepare(request)`, then
+`await resp.write(b"data: ...\n\n")` per event; `resp.write` raises `ConnectionResetError` when the
+client is gone).
+
+Client disconnect: catch `ConnectionResetError` / `asyncio.CancelledError` (aiohttp cancels the
+handler task when the client goes away) → `hub.cancel_job(job_id, "client_disconnected")` → re-raise. For non-streaming requests,
+aiohttp cancels the handler task on client disconnect (default behaviour on aiohttp ≥ 3.7 unless
+`handler_cancellation` is disabled — **set `web.AppRunner(app, handler_cancellation=True)`
+explicitly**), so wrap the job wait in `try/except asyncio.CancelledError` → cancel the job →
+re-raise. Add a unit test proving a disconnect sends `JOB_CANCEL`.
 
 ### 6.4 Optional extraction extras
 

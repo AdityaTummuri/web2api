@@ -8,7 +8,7 @@ the maintainer).
 |---|---|---|---|
 | 1. Unit | Pure functions: markdown conversion, SSE splitter, stream parsers, diff/stable-prefix, config merge/validation, fingerprints, transcript builder, error mapping. | `node:test` (extension), `pytest` (bridge) | Every change |
 | 2. DOM fixture | Driver pieces against captured provider HTML: selector resolution, turn identification, completion signals, extraction, state detection, injector strategies (where jsdom allows). | `node:test` + `jsdom` | Every change |
-| 3. Integration | Bridge with a **fake extension** over a real WebSocket; extension background modules with a fake bridge and fake tabs. | `pytest` + `httpx` + `websockets` client from Starlette's `TestClient`; Node with stubbed `chrome.*` | Every change |
+| 3. Integration | Bridge with a **fake extension** over a real WebSocket; extension background modules with a fake bridge and fake tabs. | `pytest` + aiohttp's test client and `ws_connect`; Node with stubbed `chrome.*` | Every change |
 | 4. Live smoke | Real browser, real logged-in accounts, real sites. | Manual script + checklist; later automated by the maintainer | Before each release; after any provider config change |
 
 ---
@@ -120,7 +120,7 @@ verification logic* with a fake editor; the real insertion is covered by Layer 4
 
 ### 4.1 Manual script (Phase 4 onwards)
 
-`bridge/scripts/smoke.py` (uses only `httpx`): for each provider id given on the command line:
+`bridge/scripts/smoke.py` (uses only the standard library: `urllib.request` + `json`): for each provider id given on the command line:
 1. `GET /web2api/providers` — provider routable.
 2. Non-streaming: "Reply with exactly the word PONG." → content contains `PONG`; record latency.
 3. Streaming: "Count from 1 to 30, one number per line." → ≥ 3 chunks received; final text has 30
@@ -155,8 +155,8 @@ Automate the checklist in `08-security.md` §7 in `bridge/tests/test_security.py
 
 ## 6. Fake extension (bridge integration tests)
 
-`bridge/tests/fake_extension.py`: an async client using Starlette's `TestClient.websocket_connect`
-(or the `websockets` library against a live uvicorn on a random port) that:
+`bridge/tests/fake_extension.py`: an async client using aiohttp's `session.ws_connect` against the bridge
+started on a random port via the `aiohttp_client` fixture, that:
 - sends `HELLO` (configurable token/version/origin header),
 - sends `PROVIDERS_UPDATE` with configurable providers,
 - on `JOB_START`, plays a scripted scenario: `accept → progress → deltas → done`, or errors at a given

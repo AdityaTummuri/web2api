@@ -12,7 +12,7 @@ parses `protocol.js` with a regex to assert both lists are identical (`09-testin
 
 * Endpoint: `ws://127.0.0.1:<port>/ws/extension` (default port 8787).
 * Text frames only, each frame = one UTF-8 JSON object. No binary frames.
-* Max frame size: 16 MiB (bridge: set uvicorn `ws_max_size=16 * 1024 * 1024`; snapshots can be ~2 MB).
+* Max frame size: 16 MiB (bridge: `web.WebSocketResponse(max_msg_size=16 * 1024 * 1024)`; snapshots can be ~2 MB).
 * Exactly one JSON object per frame; no batching.
 
 ## 2. Envelope
@@ -57,7 +57,8 @@ Extension                                   Bridge
   "instanceId": "inst_7Q2…",            // random, generated once per extension install, persisted in storage.local
   "extensionVersion": "0.1.0",
   "browser": { "name": "chrome", "version": "130.0.6723.58" },
-  "capabilities": ["stream", "cancel", "config_override", "health_probe", "snapshot"]
+  "capabilities": ["stream", "cancel", "config_override", "health_probe", "snapshot"],
+  "minPeerVersion": "0.1.0"           // oldest bridge version this extension works with (SemVer)
 }
 ```
 
@@ -69,9 +70,14 @@ Extension                                   Bridge
   "bridgeVersion": "0.1.0",
   "connectionId": "conn_3F…",
   "heartbeatSec": 20,
-  "replacedConnection": false
+  "replacedConnection": false,
+  "minPeerVersion": "0.1.0"           // oldest extension version this bridge works with (SemVer)
 }
 ```
+If a side finds the peer's `bridgeVersion`/`extensionVersion` below its own `minPeerVersion` requirement,
+it closes with **4410 (peer too old)** and a human-readable reason (`12` §7); add `4410` to the close-code
+table: extension stops reconnecting and shows "Update the bridge to ≥ X"; the bridge refuses the
+connection and `doctor` reports it.
 
 **Duplicate instance:** if a connection with the same `instanceId` already exists (extension reloaded,
 old socket not yet closed), the bridge closes the **old** one with code 4409 *after* sending `WELCOME`
@@ -91,6 +97,7 @@ the router chooses between them (`07-bridge-server-spec.md` §4).
 | 4401 | bridge | Bad/missing token | Stop reconnecting; popup shows "Pairing token rejected". |
 | 4403 | bridge | Origin not allowed (if detected after upgrade) | Stop reconnecting; show error. |
 | 4408 | bridge | Handshake timeout | Reconnect with backoff. |
+| 4410 | either | Peer too old (below our `minPeerVersion`, `12` §7) | Stop reconnecting; popup shows "Update the bridge to ≥ X". |
 | 4409 | bridge | Replaced by a newer connection from the same instance | Do **not** reconnect from this socket (the newer socket is already connected). |
 | 4500 | bridge | Bridge shutting down | Reconnect with backoff. |
 

@@ -16,7 +16,7 @@ the key design decisions (with reasons and rejected alternatives), and the final
                                            │ GET  /v1/models,  /web2api/* admin
                                            ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────────┐
-│  BRIDGE  (Python, FastAPI, 127.0.0.1:8787)                         bridge/web2api_bridge/   │
+│  BRIDGE  (Python, aiohttp only, 127.0.0.1:8787)                    bridge/web2api_bridge/   │
 │                                                                                            │
 │  auth & host check → OpenAI adapter → Conversation mapper → Router → ExtensionHub          │
 │                                          (prefix fingerprints)   (pick extension      │    │
@@ -167,9 +167,12 @@ Each decision: **Decision → Why → Rejected alternatives.**
 * **Why:** L-01…L-04. The bridge binds loopback only, requires a bearer token for HTTP, requires
   Origin + pairing token for the extension WebSocket, validates `Host`, has no CORS. See `08-security.md`.
 
-### D12. Python bridge stays (FastAPI + uv)
+### D12. Python bridge with a single dependency (aiohttp), shipped from source and as a binary
 
-* **Why:** It already exists, the owner uses `uv`, FastAPI's WebSocket + SSE support is good, and the
+* **Why:** The owner prefers Python and `uv`. `aiohttp` provides HTTP server, WebSocket server and SSE
+  streaming in one library, replacing FastAPI + uvicorn + starlette + pydantic (≈ 10 packages) with
+  one. Validation is hand-written. The same code is frozen into a standalone binary for users who
+  don't want Python (`12` §3). Also, the
   future maintainer/MCP tooling is natural in Python.
 
 ---
@@ -180,7 +183,7 @@ Each decision: **Decision → Why → Rejected alternatives.**
 Client                Bridge                         Extension BG              Worker tab (content + main)
   │ POST /v1/chat/      │                                 │                          │
   │ completions ───────►│ 1 auth, Host check              │                          │
-  │                     │ 2 validate (pydantic)           │                          │
+  │                     │ 2 validate (hand-written)       │                          │
   │                     │ 3 router: model → provider      │                          │
   │                     │ 4 conv mapper: continue/new,    │                          │
   │                     │   build promptText              │                          │
@@ -288,16 +291,16 @@ web2api/
     ├── uv.lock
     ├── web2api_bridge/
     │   ├── __init__.py
-    │   ├── cli.py                    # arg parsing, token generation/printing, uvicorn launch
+    │   ├── cli.py                    # arg parsing, token generation/printing, event loop + aiohttp runner
     │   ├── config.py                 # settings (env + config file)
-    │   ├── app.py                    # FastAPI app factory, middleware, exception handlers
+    │   ├── app.py                    # aiohttp app factory, middleware, error mapper
     │   ├── security.py               # host check, bearer auth, origin/token check for WS
-    │   ├── protocol.py               # message models (pydantic) mirroring extension/src/shared/protocol.js
+    │   ├── protocol.py               # message constants + frame builders/validators mirroring extension/src/shared/protocol.js
     │   ├── hub.py                    # connections, jobs, event routing, cancel, heartbeat
     │   ├── router.py                 # model id → provider/variant → connection
     │   ├── conversations.py          # fingerprints, mapping store, prompt building
     │   ├── openai_compat/
-    │   │   ├── schemas.py            # request/response pydantic models
+    │   │   ├── schemas.py            # request parsing/validation (hand-written dataclasses) + response builders
     │   │   ├── chat.py               # /v1/chat/completions (json + SSE)
     │   │   └── models.py             # /v1/models
     │   ├── admin.py                  # /web2api/status, /web2api/health, /web2api/providers, overrides

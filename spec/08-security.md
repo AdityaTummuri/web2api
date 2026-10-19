@@ -31,7 +31,7 @@ is the threat model and the list of **mandatory** controls. None of these are op
 | T8 | Malicious config override (e.g. selector pointing the "send" click at "Delete conversation"). | Overrides validated (`05` §2.4), only from authenticated bridge or user import, logged, revertible; destructive-action guard (§4.3). |
 | T9 | Prompt injection via model output (model tells the system to do something). | Output is never interpreted or acted upon by Web2API (§4.4). |
 | T10 | Leaking conversation content through logs, health reports, or snapshots that later go to the maintainer's paid API. | Redacting logger, content-free reports, redacted snapshots (`04` §9). |
-| T11 | Supply chain: compromised dependency. | Minimal deps (3 runtime Python deps, zero runtime JS deps), lockfile committed. |
+| T11 | Supply chain: compromised dependency. | Minimal deps (1 runtime Python dep: aiohttp; zero runtime JS deps), lockfiles committed, release artifacts checksummed and signed (`12` §6). |
 
 ## 3. Bridge controls
 

@@ -29,7 +29,7 @@ MV3. Do **not** add the `webextension-polyfill`. Where a Firefox-only capability
   "name": "Web2API",
   "version": "0.1.0",
   "description": "Use the AI chat sites you are logged into as a local OpenAI-compatible API.",
-  "icons": { "48": "icons/icon-48.png", "96": "icons/icon-96.png" },
+  "icons": { "48": "icons/icon-48.png", "96": "icons/icon-96.png", "128": "icons/icon-128.png" },
   "action": { "default_popup": "popup/popup.html", "default_title": "Web2API" },
   "permissions": ["storage", "tabs", "scripting", "alarms"],
   "host_permissions": [],

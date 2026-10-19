@@ -51,6 +51,7 @@ previous ones.
 | `09-testing-strategy.md` | Unit tests, DOM-fixture tests, live smoke tests, health checks. | Continuously. |
 | `10-implementation-plan.md` | **The ordered, step-by-step build plan** with acceptance criteria for each step. | This is your task list. Follow it in order. |
 | `11-future-maintainer-and-mcp.md` | What the future maintainer agent and MCP server will need, and the hooks you must build *now* so they are possible later. | Before finalising the protocol and config formats. |
+| `12-product-and-distribution.md` | What makes this a dependable product rather than a prototype: footprint budgets, reliability engineering, binary + source distribution, service install, updates, diagnostics, CI/release, support policy. | Before Phase 3, and again before release. |
 
 ## 4. Ground rules for the implementer
 
@@ -69,9 +70,11 @@ Follow these unless a specific document overrides them.
    type comments, and plain files. Content scripts cannot be ES modules, so they share one namespace
    object (`globalThis.W2A`). The background script *can* be an ES module (`"type": "module"`).
    Rationale: the future maintainer agent must be able to read and patch any file without a toolchain.
-5. **Python 3.11+ with FastAPI** for the bridge, managed with `uv` and a `pyproject.toml`
-   (replace `requirements.txt`). Keep dependencies minimal: `fastapi`, `uvicorn[standard]`,
-   `pydantic`. Nothing else in the core.
+5. **Python 3.11+ with exactly one third-party dependency, `aiohttp`**, for the bridge, managed with
+   `uv` and a `pyproject.toml` (replace `requirements.txt`). Everything else is the standard
+   library. The bridge ships two ways: from source (`uv`) **and** as a single-file standalone binary
+   (`12-product-and-distribution.md`). Stay within the size/RAM/startup budgets in `12` §2.
+   Playwright, FastAPI, uvicorn, pydantic and httpx are never used.
 6. **One request in flight per chat tab.** A chat tab is a single-threaded resource. Parallelism is
    achieved with multiple tabs (a tab pool), never by sending two prompts into the same tab.
 7. **Every failure must be loud and typed.** No `catch (e) {}` that swallows errors. Every error
@@ -110,7 +113,7 @@ Follow these unless a specific document overrides them.
 
 ```
 web2api/
-├── bridge_server.py        # Prototype bridge (FastAPI + WebSocket) for the Firefox extension. Gemini only.
+├── bridge_server.py        # Prototype bridge (FastAPI + WebSocket; replaced by bridge/) for the Firefox extension. Gemini only.
 ├── server.py               # LEGACY: Playwright headless server. Superseded (violates R3).
 ├── session_manager.py      # LEGACY: Playwright automation engine for Gemini.
 ├── setup_session.py        # LEGACY: Playwright interactive login.

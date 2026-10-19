@@ -1,0 +1,26 @@
+[SYSTEM DIRECTIVE: CONTEXT HANDOVER BRIEF]
+
+We are approaching usage and rate limits for this current AI session. Before our context window resets or access is interrupted, please generate an ultra-dense, comprehensive technical state brief designed to be pasted as the intake prompt for a fresh AI session.
+
+Structure your response EXACTLY using the following sections:
+
+### 1. MISSION & CONSTRAINTS
+- Core objective and scope of our work
+- Primary technology stack, framework versions, and architectural decisions
+- Non-negotiable constraints, rules, and user preferences
+
+### 2. COMPLETED & VERIFIED
+- Components, modules, or files created, modified, and verified
+- Specific problems or bugs that were successfully diagnosed and solved
+
+### 3. ACTIVE PROBLEM / CURRENT STATE
+- Exactly what we are working on right at this moment
+- Current blockers, active error traces, or incomplete code blocks
+- Relevant code snippets or configuration state needed to continue
+
+### 4. IMMEDIATE NEXT ACTIONS
+- The exact step-by-step task the new AI session should execute first
+- Pending items waiting in the queue
+
+Conclude your response with this exact marker line:
+--- HANDOVER CAPSULE READY ---

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PromptRelay</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="cr-app">
+    <!-- Header -->
+    <header class="cr-header">
+      <div class="cr-brand">
+        <span class="cr-logo">🔄</span>
+        <div>
+          <h1 class="cr-title">PromptRelay</h1>
+          <span class="cr-subtitle">AI Session & Context Bridge</span>
+        </div>
+      </div>
+      <span class="cr-version-tag">v1.0.0</span>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="cr-nav">
+      <button class="cr-tab active" data-tab="tab-overview">Overview</button>
+      <button class="cr-tab" data-tab="tab-capsules">Vault (<span id="capsule-count">0</span>)</button>
+      <button class="cr-tab" data-tab="tab-settings">Settings</button>
+    </nav>
+
+    <!-- Tab 1: Overview & Live Active Status -->
+    <main class="cr-content">
+      <section id="tab-overview" class="cr-tab-pane active">
+        <div class="cr-card cr-active-session-card">
+          <div class="cr-card-header">
+            <span class="cr-card-label">CURRENT CHAT SESSION</span>
+            <span class="cr-badge" id="active-platform-badge">Detecting...</span>
+          </div>
+
+          <div class="cr-session-metrics">
+            <div class="cr-metric">
+              <span class="cr-metric-value" id="session-count">0</span>
+              <span class="cr-metric-label">Prompts Sent</span>
+            </div>
+            <div class="cr-metric-divider"></div>
+            <div class="cr-metric">
+              <span class="cr-metric-value" id="session-load">0%</span>
+              <span class="cr-metric-label">Estimated Load</span>
+            </div>
+            <div class="cr-metric-divider"></div>
+            <div class="cr-metric">
+              <span class="cr-metric-value" id="session-window">3h</span>
+              <span class="cr-metric-label">Rolling Window</span>
+            </div>
+          </div>
+
+          <div class="cr-progress-wrapper">
+            <div class="cr-progress-bar">
+              <div class="cr-progress-fill" id="session-progress" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <div class="cr-alert-banner" id="session-alert" style="display: none;">
+            ⚠️ Session is nearing rate limit. Generate a handover brief now!
+          </div>
+        </div>
+
+        <div class="cr-section-heading">QUICK ACTIONS</div>
+        <div class="cr-btn-stack">
+          <button class="cr-btn cr-btn-primary" id="btn-popup-handover">
+            <span>📝</span> Inject Handover Prompt
+          </button>
+          <button class="cr-btn cr-btn-secondary" id="btn-popup-capture">
+            <span>💾</span> Save Last Response as Capsule
+          </button>
+        </div>
+
+        <div class="cr-section-heading" style="margin-top: 14px;">TELEPORT TO NEW SESSION</div>
+        <div class="cr-teleport-grid">
+          <button class="cr-teleport-card" data-dest="claude">
+            <span class="cr-tc-name">Claude</span>
+            <span class="cr-tc-sub">claude.ai/new</span>
+          </button>
+          <button class="cr-teleport-card" data-dest="chatgpt">
+            <span class="cr-tc-name">ChatGPT</span>
+            <span class="cr-tc-sub">chatgpt.com</span>
+          </button>
+          <button class="cr-teleport-card" data-dest="gemini">
+            <span class="cr-tc-name">Gemini</span>
+            <span class="cr-tc-sub">gemini.google.com</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Tab 2: Saved Capsules Vault -->
+      <section id="tab-capsules" class="cr-tab-pane">
+        <div class="cr-vault-actions">
+          <span class="cr-card-label">SAVED STATE BRIEFS</span>
+          <button class="cr-text-btn" id="btn-clear-vault">Clear All</button>
+        </div>
+
+        <div class="cr-capsule-list" id="capsule-list">
+          <!-- Populated by popup.js -->
+          <div class="cr-empty-state" id="capsule-empty">
+            No saved handover capsules yet.<br>Click "Save Last Response" in any active chat.
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 3: Threshold Settings -->
+      <section id="tab-settings" class="cr-tab-pane">
+        <form id="settings-form">
+          <div class="cr-form-group">
+            <label class="cr-label">ChatGPT Alert Threshold (prompts / 3h)</label>
+            <input type="number" id="setting-thresh-chatgpt" class="cr-input" min="5" max="200" value="30">
+          </div>
+
+          <div class="cr-form-group">
+            <label class="cr-label">Claude Alert Threshold (prompts / 5h)</label>
+            <input type="number" id="setting-thresh-claude" class="cr-input" min="5" max="200" value="20">
+          </div>
+
+          <div class="cr-form-group">
+            <label class="cr-label">Gemini Alert Threshold (prompts / 4h)</label>
+            <input type="number" id="setting-thresh-gemini" class="cr-input" min="5" max="200" value="40">
+          </div>
+
+          <div class="cr-form-group">
+            <label class="cr-label">Warning Alert Trigger Percentage</label>
+            <input type="number" id="setting-warn-percent" class="cr-input" min="50" max="95" value="80">
+          </div>
+
+          <div class="cr-form-group cr-checkbox-group">
+            <label class="cr-checkbox-label">
+              <input type="checkbox" id="setting-hud-enabled" checked>
+              <span>Enable Floating On-Page HUD Widget</span>
+            </label>
+          </div>
+
+          <div class="cr-settings-actions">
+            <button type="submit" class="cr-btn cr-btn-primary">Save Preferences</button>
+            <button type="button" class="cr-btn cr-btn-secondary" id="btn-reset-counters">Reset Counters</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <!-- Footer Toast & Legal Note -->
+    <div class="cr-toast" id="popup-toast"></div>
+
+    <footer class="cr-footer">
+      <span>100% On-Device • Zero External Data • MIT License</span>
+    </footer>
+  </div>
+
+  <script src="../utils/storage.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

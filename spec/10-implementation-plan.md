@@ -14,9 +14,9 @@ parts that are unaffected. Never silently diverge from the spec.
 ## Phase 0 — Repository housekeeping (½ day)
 
 **Tasks**
-1. Create `archive/playwright-gemini/` and `git mv` into it: `server.py`, `session_manager.py`,
-   `setup_session.py`, `templates/`, `ask-gemini.sh`, `README.md`, `docs/`. Add
-   `archive/README.md` (5–10 lines: what it was, why archived — link `spec/01` §4).
+1. `archive/playwright-gemini/` already exists and already contains the old `README.md` and `docs/` (moved when the user docs were written). `git mv` into it the remaining files: `server.py`, `session_manager.py`,
+   `setup_session.py`, `templates/`, `ask-gemini.sh`. `archive/README.md` already exists; update its
+   last bullet once the code files have moved.
 2. Leave `bridge_server.py`, `extension/`, `start.sh`, `requirements.txt` in place for now (the
    prototype keeps working until replaced). Rename `extension/` → `extension-prototype/` with `git mv`
    so the new `extension/` can be created cleanly. Update `.gitignore` (`extension/node_modules/`,

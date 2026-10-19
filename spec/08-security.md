@@ -12,7 +12,7 @@ is the threat model and the list of **mandatory** controls. None of these are op
 |---|---|---|
 | Logged-in provider sessions | Browser cookies (never leave the browser) | Ability to chat as the owner, consume paid quota, read history. |
 | Conversation content | Provider servers, the worker tabs, transiently in bridge memory | Private data. |
-| API token | `~/.config/web2api/api_token` | Grants HTTP API access. |
+| API keys (`sk-w2a-…`) | `<config>/keys.json` (SHA-256 hashes only) | Grant HTTP API access, scoped and revocable (`13`). |
 | Pairing token | `~/.config/web2api/pairing_token`, extension `storage.local` | Lets a WebSocket client act as the extension. |
 | Provider config overrides | extension `storage.local` | Malicious selectors could make the driver click the wrong things. |
 | Health snapshots | extension `storage.local`, bridge memory | Page structure; must not contain conversation text. |
@@ -37,8 +37,10 @@ is the threat model and the list of **mandatory** controls. None of these are op
 
 ### 3.1 HTTP authentication, no CORS
 
-* Every route except `GET /healthz` requires `Authorization: Bearer <api_token>`. Compare with
-  `hmac.compare_digest`. Missing/invalid → 401 OpenAI-style error.
+* Every route except `GET /healthz` requires a valid API key (`Authorization: Bearer sk-w2a-…` or
+  `X-API-Key`). Keys are scoped (`chat` / `admin`), optionally provider-restricted, rate-limited,
+  expirable and revocable; only hashes are stored; comparisons use `hmac.compare_digest`; failures
+  return OpenAI-style 401/403/429 errors. Full design: `13` §1.
 * Do **not** install `CORSMiddleware`. Without CORS headers, browsers block cross-origin pages from
   reading responses, and the `Authorization` header forces a preflight that fails.
 * Do not accept the token in query strings (would end up in logs and browser history).
@@ -76,12 +78,13 @@ Middleware for HTTP **and** the WebSocket route: allowed `Host` values are `127.
 
 * Generated with `secrets.token_urlsafe(32)`; stored in files created with mode 0600 in a directory
   with mode 0700.
-* Printed once at startup (owner needs them) and via `web2api-bridge tokens show`. Never logged
-  otherwise.
-* `tokens rotate` regenerates; rotating the pairing token closes all extension connections with 4401
-  (the user re-pastes the token).
-* Two separate tokens: leaking the API token (likely — it gets pasted into many tools) does not allow
-  impersonating the extension.
+* The pairing token is shown by `web2api-bridge pairing show`; API keys are shown **once** at creation
+  (`keys create`, and the first-run `default` key). Never logged otherwise.
+* `pairing rotate` regenerates the pairing token and closes all extension connections with 4401 (the
+  user re-pastes it). `keys rotate`/`revoke` affect API keys only.
+* Two separate secrets of different formats: leaking an API key (likely — it gets pasted into many
+  tools) does not allow impersonating the extension, and a key with only `chat` scope cannot reach the
+  admin API.
 
 ### 3.6 Input limits
 

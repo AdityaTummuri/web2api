@@ -17,7 +17,7 @@ the Anthropic API.
 ### 1.2 Where it runs
 
 A separate Python process (`maintainer/` package, later) that talks to the bridge's **admin API**
-(`07` §9) with the API token, and to the LLM provider's official API with its own API key. It never
+(`07` §9) with a dedicated `admin`-scope API key (`13`), and to the LLM provider's official API with its own API key. It never
 talks to the extension directly and never touches browser cookies.
 
 ### 1.3 Loop
@@ -98,7 +98,7 @@ configuration.
 ### 2.2 Shape
 
 * Separate small Python package `mcp/` (stdio transport, since most MCP clients spawn local servers),
-  using the official MCP Python SDK. Talks to the bridge over HTTP with the API token (read from the
+  using the official MCP Python SDK. Talks to the bridge over HTTP with a `chat`-scope API key (`13`) (read from the
   token file or an env var).
 * Tools (initial set):
   | Tool | Input | Output |

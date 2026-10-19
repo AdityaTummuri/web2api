@@ -51,6 +51,7 @@ previous ones.
 | `09-testing-strategy.md` | Unit tests, DOM-fixture tests, live smoke tests, health checks. | Continuously. |
 | `10-implementation-plan.md` | **The ordered, step-by-step build plan** with acceptance criteria for each step. | This is your task list. Follow it in order. |
 | `11-future-maintainer-and-mcp.md` | What the future maintainer agent and MCP server will need, and the hooks you must build *now* so they are possible later. | Before finalising the protocol and config formats. |
+| `13-api-keys-and-openai-compat.md` | OpenAI-style API keys (`sk-w2a-…`), scopes, rate limits, and the exact OpenAI compatibility contract + conformance suite. Supersedes the single API token in `07`/`08`. | Before building auth or the `/v1` endpoints. |
 | `12-product-and-distribution.md` | What makes this a dependable product rather than a prototype: footprint budgets, reliability engineering, binary + source distribution, service install, updates, diagnostics, CI/release, support policy. | Before Phase 3, and again before release. |
 
 ## 4. Ground rules for the implementer

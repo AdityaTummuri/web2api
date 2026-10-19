@@ -55,6 +55,12 @@ on the owner's logged-in browser; otherwise prepare exact instructions and ask t
       (i) the network stream complete, (ii) the DOM update, (iii) `MutationObserver` fire? Same with a
       dedicated non-minimized window.
    f. Is a host permission needed for `ws://127.0.0.1` from the background in each browser?
+   g. **Firefox MV3 host permissions:** are the provider `host_permissions` granted at install on
+      Firefox ≥ 128, or does the user have to grant them afterwards (Firefox has treated MV3 host
+      permissions as user-controllable)? If not granted automatically, the popup must detect the missing
+      grant (`chrome.permissions.contains`) and offer a "Grant access" button that calls
+      `chrome.permissions.request({origins:[…]})` from a user gesture; update `04` §8 and the user docs
+      (`docs/install-firefox.md`) with the verified behaviour.
 3. Write `spikes/platform/RESULTS.md` with a yes/no table and notes, and update the spec where the
    facts differ (e.g. if Firefox needs a different keepalive, edit `04` §3.3; record the change in
    `spec/OPEN_QUESTIONS.md` → "resolved").
@@ -108,12 +114,16 @@ No bridge yet. The popup "Test" section drives jobs locally so the driver can be
 
 **Tasks**
 1. `bridge/pyproject.toml`, package skeleton, `cli.py` (tokens, banner), `config.py`.
-2. `security.py` (Host check, bearer auth, WS origin/token) + `test_security.py`.
+2. `security.py` (Host check, WS origin/pairing token, auth middleware) + `keys.py` (full API-key system
+   per `13` §1: `sk-w2a-…` keys, hashed storage, scopes, provider restrictions, per-key rate limits,
+   hot reload, CLI `keys create|list|revoke|rotate`, `pairing show|rotate`) + `test_security.py`,
+   `test_keys.py`. Also `paths.py` (`07` §2.1).
 3. `protocol.py`, `errors.py` + tests (incl. constants parity test with `protocol.js`).
 4. `hub.py` (connections, handshake, duplicate instance handling, jobs, request/response,
    heartbeat), `router.py`, `fake_extension.py` + integration tests.
-5. `openai_compat/schemas.py`, `chat.py` (non-streaming only, conversation mapping stubbed to "always
-   fresh start" with the transcript template), `models.py`.
+5. `openai_compat/schemas.py` (hand-written validation, no pydantic), `chat.py` (non-streaming only,
+   conversation mapping stubbed to "always fresh start" with the transcript template), `models.py`
+   (`/v1/models`, `/v1/models/{model:.+}`), and the `unsupported_endpoint` fallback (`13` §2.1).
 6. Extension: `background/bridge-client.js` (state machine, backoff, keepalive, close-code handling),
    wire `job-runner.js` to bridge `JOB_*` frames, `PROVIDERS_UPDATE`, popup Connection section
    (bridge URL, pairing token, status).
@@ -129,7 +139,9 @@ No bridge yet. The popup "Test" section drives jobs locally so the driver can be
   '{"model":"claude","messages":[{"role":"user","content":"Reply with exactly PONG"}]}'` returns a
   valid `chat.completion` for each tier-1 provider.
 - Manual: the official OpenAI Python SDK works with `base_url="http://127.0.0.1:8787/v1"`,
-  `api_key=<api token>`, `model="chatgpt"` (non-streaming).
+  `api_key=sk-w2a-…` (from `keys create`), `model="chatgpt"` (non-streaming); `client.models.list()` and
+  `retrieve()` work; a bad/revoked key raises `openai.AuthenticationError`; the conformance tests in
+  `13` §3 (non-streaming part) pass.
 - Manual: killing and restarting the bridge → extension reconnects within 30 s without user action.
 - Manual: wrong pairing token → popup shows "Pairing token rejected" and stops retrying.
 
@@ -195,7 +207,7 @@ No bridge yet. The popup "Test" section drives jobs locally so the driver can be
 2. Overrides: config-store `applyOverride/revert`, bridge `CONFIG_*` frames, popup import/revert.
 3. Admin API per `07` §9.
 4. Popup Health and Settings sections; badge states.
-5. Root `README.md`: what it is, ToS/account-risk warning (L-47), install (bridge + extension for
+5. Update the root `README.md` and `docs/` (written in advance as target-state docs): what it is, ToS/account-risk warning (L-47), install (bridge + extension for
    Chrome and Firefox), pairing, using with OpenAI SDK / curl / common tools, model ids, thread
    behaviour and its limitations, troubleshooting by error code, privacy notes (history mode,
    logging).
@@ -208,11 +220,40 @@ No bridge yet. The popup "Test" section drives jobs locally so the driver can be
   report and a snapshot appear in the popup and in `GET /web2api/health/reports`; revert fixes it.
 - Manual: a fresh person can follow the README from zero to a working curl call.
 
-**→ v1 complete.**
+**→ feature-complete; continue with Phase 7 (productization) before any release.**
 
 ---
 
-## Phase 7 — Tier-2 providers (v1.1, ~1 day per provider)
+## Phase 7 — Productization (4–6 days) — **required for 1.0**
+
+Everything in `12-product-and-distribution.md`. The owner's bar is a product to rely on, not a demo.
+
+**Tasks**
+1. Measure the real footprint baseline (RSS, startup, binary size, extension size) and write the
+   measured budgets into `12` §2; add the CI gates.
+2. `bridge/packaging/build_binary.py` (PyInstaller), the five-platform binary build matrix, onefile +
+   onedir artifacts, running the full integration + conformance suites against the frozen binary.
+3. `service.py`: `service install|uninstall|status|restart` for systemd-user, launchd, Task Scheduler;
+   verify reboot survival on each OS.
+4. `doctor.py`: `doctor [--probe]` and `support-bundle` (+ the no-secret-leak tests, `12` §6).
+5. Version compatibility (`minPeerVersion`, close code 4410, `12` §7), `CHANGELOG.md`, update-check
+   option (off by default).
+6. Release pipeline (`12` §8): tag-driven build, `SHA256SUMS` + signature, PyPI trusted publishing,
+   extension zips.
+7. Extension store readiness (`12` §9): 128 px icon, privacy policy, permission justifications, store
+   listings; AMO signing; convert provider host permissions to optional permissions with dynamic content
+   script registration (`12` §9.3).
+8. Soak, chaos and fuzz tests (`12` §5.6); fix what they find.
+9. Docs per `12` §10 (the user guides already exist in `docs/` as the target description — update them
+   to match reality, remove "not yet implemented" banners, add real screenshots).
+
+**AC** — the "Definition of done for 1.0" checklist in `12` §11 is fully ticked.
+
+**→ v1.0 release.**
+
+---
+
+## Phase 8 — Tier-2 providers (v1.1, ~1 day per provider)
 
 For each of `deepseek`, `grok`, `perplexity`, `mistral`, `qwen`, `kimi`: follow `05` §6 (recon →
 config → optional parser → tests → smoke). Ship each with `enabled: false` default until it passes
@@ -220,7 +261,7 @@ smoke three times. Gemini net tap can be attempted here too.
 
 ---
 
-## Phase 8 — Later (not v1; design notes exist)
+## Phase 9 — Later (not v1; design notes exist)
 
 | Item | Where designed |
 |---|---|
@@ -229,6 +270,7 @@ smoke three times. Gemini net tap can be attempted here too.
 | Image/file inputs | L-48 |
 | Firefox `webRequest.filterResponseData` net-tap transport | `04` §6.6 |
 | Anthropic Messages-compatible endpoint (`/v1/messages`) | — (mirror §6 of `07`) |
+| OpenAI Responses API (`/v1/responses`) adapter over the same job pipeline | `13` §2.1 |
 | MCP server | `11` |
 | Maintainer agent | `11` |
 | Native Messaging transport | `03` D2 |
@@ -246,4 +288,5 @@ smoke three times. Gemini net tap can be attempted here too.
 | 4 Streaming + net tap | 4–6 d |
 | 5 Conversations + pool | 3–4 d |
 | 6 Health + docs | 3 d |
-| **v1 total** | **~18–25 working days** of focused implementation |
+| 7 Productization | 4–6 d |
+| **v1.0 total** | **~22–31 working days** of focused implementation |

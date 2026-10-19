@@ -11,7 +11,7 @@ the key design decisions (with reasons and rejected alternatives), and the final
 ┌────────────────────────────────────────────────────────────────────────────────────────────┐
 │  API CLIENTS  (curl, OpenAI Python/JS SDK, LangChain, Cursor/Continue, later: MCP server)  │
 └──────────────────────────────────────────┬─────────────────────────────────────────────────┘
-                                           │ HTTP  (Bearer token)
+                                           │ HTTP  (Bearer sk-w2a-… API key)
                                            │ POST /v1/chat/completions   (JSON or SSE stream)
                                            │ GET  /v1/models,  /web2api/* admin
                                            ▼
@@ -294,7 +294,11 @@ web2api/
     │   ├── cli.py                    # arg parsing, token generation/printing, event loop + aiohttp runner
     │   ├── config.py                 # settings (env + config file)
     │   ├── app.py                    # aiohttp app factory, middleware, error mapper
-    │   ├── security.py               # host check, bearer auth, origin/token check for WS
+    │   ├── security.py               # host check, origin/pairing-token check for WS, auth middleware
+    │   ├── keys.py                   # API key store: create/verify/revoke/rotate, scopes, rate limits (13)
+    │   ├── paths.py                  # per-OS config/state dirs (stdlib only)
+    │   ├── service.py                # service install/uninstall (systemd/launchd/schtasks) (12 §4)
+    │   ├── doctor.py                 # doctor + support-bundle (12 §6)
     │   ├── protocol.py               # message constants + frame builders/validators mirroring extension/src/shared/protocol.js
     │   ├── hub.py                    # connections, jobs, event routing, cancel, heartbeat
     │   ├── router.py                 # model id → provider/variant → connection

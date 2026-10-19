@@ -56,7 +56,7 @@ State dir: `$XDG_STATE_HOME/web2api/` (default `~/.local/state/web2api/`).
 | `host` | `WEB2API_HOST` | `127.0.0.1` | Bind address. Non-loopback refused unless `allow_remote = true` (§08 3.4). |
 | `port` | `WEB2API_PORT` | `8787` | Port for HTTP and WebSocket. |
 | `allow_remote` | `WEB2API_ALLOW_REMOTE` | `false` | |
-| `api_token_file` | — | `<config>/api_token` | Bearer token for HTTP clients. Auto-generated (0600). |
+| `keys_file` | — | `<config>/keys.json` | API keys (hashes only), `sk-w2a-…` format. Managed with `web2api-bridge keys …`; full design in `13` §1. |
 | `pairing_token_file` | — | `<config>/pairing_token` | Token the extension sends in `HELLO`. Auto-generated (0600). |
 | `allowed_extension_origins` | — | `["chrome-extension://*", "moz-extension://*"]` | Origin patterns allowed on the WS. Can be pinned to exact ids. |
 | `log_level` | `WEB2API_LOG_LEVEL` | `info` | |
@@ -77,9 +77,9 @@ State dir: `$XDG_STATE_HOME/web2api/` (default `~/.local/state/web2api/`).
 
 ```
 web2api-bridge [serve] [--host H] [--port P] [--log-level L]
-web2api-bridge tokens show            # prints both tokens and where they are stored
-web2api-bridge tokens rotate [--api|--pairing|--all]
-web2api-bridge status                 # GET /web2api/status using the api token; pretty print
+web2api-bridge keys create|list|revoke|rotate   # OpenAI-style API keys, scopes, limits (13 §1.6)
+web2api-bridge pairing show|rotate    # extension pairing token
+web2api-bridge status                 # GET /web2api/status (needs an admin-scope key via WEB2API_API_KEY or --key); pretty print
 web2api-bridge --version              # bridge + protocol version, python or frozen
 web2api-bridge doctor [--probe]       # checklist of the whole chain (12 §6.1)
 web2api-bridge support-bundle [-o P]  # redacted zip for bug reports (12 §6.2)
@@ -93,15 +93,17 @@ only (no click/typer — dependency rule).
 `/web2api`; state dir: Linux `$XDG_STATE_HOME` or `~/.local/state`, macOS
 `~/Library/Application Support/web2api/state`, Windows `%LOCALAPPDATA%\web2api`. The `~/.config/...`
 paths used elsewhere in this spec are the Linux values. Create dirs with mode 0700 on POSIX.
-On `serve` startup print (once) a banner:
+
+On `serve` startup print a banner. The API key line appears **only on the very first run** (when the
+`default` key is created, `13` §1.6); later runs show the key id and how to make more:
 ```
 Web2API bridge 0.1.0 listening on http://127.0.0.1:8787
   OpenAI base URL : http://127.0.0.1:8787/v1
-  API token       : w2a_api_…   (file: ~/.config/web2api/api_token)
-  Pairing token   : w2a_pair_…  (paste into the extension popup)
+  API key         : sk-w2a-…    (shown once; new keys: web2api-bridge keys create --name NAME)
+  Pairing token   : w2a_pair_…  (paste into the extension popup; `web2api-bridge pairing show`)
 ```
-Tokens: `secrets.token_urlsafe(32)` prefixed `w2a_api_` / `w2a_pair_`. Create files with
-`os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)`.
+API keys: format and storage in `13` §1. Pairing token: `"w2a_pair_" + secrets.token_urlsafe(32)`.
+Create secret files with `os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)`.
 
 ---
 
@@ -439,7 +441,7 @@ If `web2api.extract` contains `"code_blocks"`, add `web2api.code_blocks: [{"lang
 parsed from the final markdown with a fence-aware parser (handles ```` and ~~~ fences, info strings).
 This replaces the always-on `extracted` object of the prototype (L-34).
 
-### 6.5 `GET /v1/models`
+### 6.5 `GET /v1/models` and `GET /v1/models/{model}`
 
 Built from current connections: for each routable provider, `"<provider>"` and each
 `"<provider>/<variant>"`, plus `"auto"`, plus configured aliases. Shape:
@@ -447,6 +449,9 @@ Built from current connections: for each routable provider, `"<provider>"` and e
 { "object": "list", "data": [ { "id": "claude/default", "object": "model", "created": 0, "owned_by": "web2api:claude" } ] }
 ```
 If no extension is connected, return an empty list (200), not an error (clients call this at startup).
+Only models the calling key may use are listed (`13` §1.3). `GET /v1/models/{model:.+}` returns one model
+object (the id contains `/`, so the route uses a catch-all pattern); unknown → 404 `model_not_found`.
+Any other unimplemented `/v1/*` path returns the `unsupported_endpoint` error in `13` §2.1.
 
 ---
 
@@ -500,7 +505,7 @@ Not in v1. Designed now so the protocol and conversation mapper don't need break
 
 ## 9. Admin API (`admin.py`) — also the future MCP/maintainer surface
 
-All require the API bearer token. All return JSON, never prompt/answer text unless stated.
+All require an API key with the `admin` scope (`13` §1.3); key management endpoints are in `13` §1.7. All return JSON, never prompt/answer text unless stated.
 
 | Method & path | Purpose |
 |---|---|

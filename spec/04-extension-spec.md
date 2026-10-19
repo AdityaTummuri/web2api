@@ -805,6 +805,9 @@ Sections (single scrolling page with collapsible sections, ≈ 380 px wide):
 2. **Providers** — one row per provider:
    * Name, status dot (ready / degraded / login required / unhealthy / disabled), tab count
      (idle/busy), enable toggle, pool size (1–4).
+   * If the browser has not granted the provider's host permission (always checked on Firefox, see
+     `10` Phase 1 spike g): show "Grant access" which calls `chrome.permissions.request` (user gesture
+       required); the provider stays `disabled` until granted.
    * Buttons: "Open worker tab", "Use current tab" (only when the active tab belongs to that provider
      and isn't already in the pool), "Release tab".
    * Hint when net tap inactive in an assigned tab: "Reload tab for exact streaming".

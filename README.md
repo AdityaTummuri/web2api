@@ -19,6 +19,15 @@ itself receives.
 > the matching phase is finished; until then treat them as the target behaviour. Each guide says which
 > parts depend on later phases.
 
+## Releases
+
+| Version | What | Status |
+|---|---|---|
+| **1.0.0** | OpenAI-compatible API for ChatGPT, Claude, Gemini; Chrome + Firefox extension; bridge as Python package or standalone binary | planned (not released) |
+| **2.0.0** | **MCP server**: chat, built-in web search, **Deep Research** tasks, and a free fast model for **commit messages, PR descriptions, README and docs** | planned (not released) |
+
+See [`CHANGELOG.md`](CHANGELOG.md) and [`RELEASING.md`](RELEASING.md).
+
 ## Why you might want it
 
 * Use a chat subscription you already pay for from editors, scripts and agents that speak the OpenAI API.
@@ -26,6 +35,8 @@ itself receives.
 * Lightweight: one Python dependency (`aiohttp`) or a single standalone binary; no headless browser, no
   second login, near-zero idle CPU.
 * Private by design: loopback-only, API-key protected, no telemetry.
+* **From v2.0.0, an MCP server** so assistants like Claude Code and Cursor can use the browser-only goodies —
+  Deep Research, built-in web search, and a near-free Flash-Lite lane for chores — see [docs/mcp.md](docs/mcp.md).
 
 ## Important warnings
 
@@ -65,6 +76,9 @@ itself receives.
 | [API keys](docs/api-keys.md) | Creating, scoping, rotating and revoking `sk-w2a-…` keys |
 | [API reference](docs/api-reference.md) | Endpoints, parameters, streaming, errors |
 | [Using it with other tools](docs/compatibility.md) | Cursor, Continue, Open WebUI, LangChain, Aider, … |
+| [MCP server (v2.0.0)](docs/mcp.md) | Use Web2API from Claude Code, Cursor, VS Code, Codex, … |
+| [Deep Research and search (v2.0.0)](docs/research-and-search.md) | Cited answers and long research reports |
+| [Developer chores (v2.0.0)](docs/dev-tools.md) | Commit messages, PR text, README/docs generation, git hook |
 | [Providers](docs/providers.md) | What's supported, quirks, status |
 | [Error codes](docs/errors.md) | What each error means and how to fix it |
 | [Troubleshooting](docs/troubleshooting.md) | `doctor`, support bundle, common problems |

@@ -147,6 +147,9 @@ Comments are for explanation only — real JSON files cannot contain comments. P
 }
 ```
 
+> **v2.0.0 additions:** `capabilities`, `modes` (search / deep research), step DSL, and variant `select`
+> steps are defined in `14` §9. They are optional keys; v1 configs stay valid.
+
 ### 2.2 `SelectorTiers` value
 
 A `SelectorTiers` is an **array** of `SelectorEntry` (tried in order = tiers), or a single string

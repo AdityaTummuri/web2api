@@ -60,7 +60,8 @@ sk-w2a-<48 characters from [A-Za-z0-9]>        e.g.  sk-w2a-9fKq2ZxT4mNb7VcL0aRy
 | Scope | Allows |
 |---|---|
 | `chat` | `/v1/chat/completions`, `/v1/models*` |
-| `admin` | everything under `/web2api/*` (status, health, config overrides, keys management, jobs) |
+| `tasks` | the tasks API (`/web2api/tasks*`) and the MCP server (`/mcp`, `web2api-bridge mcp`) — added in v2.0.0, see `14` §8 |
+| `admin` | everything else under `/web2api/*` (status, health, config overrides, keys management, jobs) |
 
 `providers`: `["*"]` or a list of provider ids; a request for a model whose provider isn't allowed →
 403 (`permission_error`, code `provider_not_allowed`), and `/v1/models` lists only allowed models.
@@ -101,7 +102,8 @@ authenticated response: `x-ratelimit-limit-requests`, `x-ratelimit-remaining-req
 ### 1.6 CLI
 
 ```
-web2api-bridge keys create --name NAME [--admin] [--providers claude,chatgpt]
+web2api-bridge keys create --name NAME [--scopes chat,tasks,admin | --admin] [--providers claude,chatgpt]
+                           # --admin is shorthand for --scopes chat,admin; default scopes: chat
                            [--rpm N] [--concurrent N] [--expires 30d|2026-12-31]
         → prints the key ONCE, plus ready-to-paste env vars:
             export OPENAI_API_KEY=sk-w2a-…

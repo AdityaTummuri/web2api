@@ -24,6 +24,9 @@ web2api-bridge keys create --name cursor
 # restrict a key to some providers, limit its speed, make it expire
 web2api-bridge keys create --name ci-bot --providers claude,chatgpt --rpm 20 --concurrent 1 --expires 30d
 
+# explicit scopes (e.g. for the MCP server: chat + tasks)
+web2api-bridge keys create --name mcp --scopes chat,tasks
+
 # a key that can also use the admin API (status, health, config, key management)
 web2api-bridge keys create --name admin-tool --admin
 
@@ -40,6 +43,7 @@ web2api-bridge keys rotate cursor     # new key, same settings; old one revoked 
 | Scope | Allows |
 |---|---|
 | `chat` (default) | `/v1/chat/completions`, `/v1/models` |
+| `tasks` *(v2.0.0)* | The tasks API and the MCP server (`web2api-bridge mcp install` creates a key with `chat,tasks`) |
 | `admin` | `/web2api/*` — status, health, config overrides, jobs, key management |
 
 ## Limits per key

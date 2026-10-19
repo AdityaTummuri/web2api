@@ -89,6 +89,10 @@ runs the parser tests locally, and opens a PR for human review. It never auto-me
 
 ## 2. The MCP server
 
+> **Superseded by `14-mcp-server-v2.md`** (release v2.0.0): the design below was an early sketch
+> (separate package, official SDK). The shipped design is in-bridge, stdlib-only, with the tools,
+> lanes and workflows defined in `14`. Keep this section only for the original motivation.
+
 ### 2.1 Purpose
 
 Let MCP clients (Claude Code, Claude Desktop, Cursor, …) use the web chat models as tools — e.g.

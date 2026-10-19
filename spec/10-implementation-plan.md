@@ -253,6 +253,53 @@ Everything in `12-product-and-distribution.md`. The owner's bar is a product to 
 
 ---
 
+## Phase 10 — MCP server, research and utility lane (release **v2.0.0**) (≈ 12–18 days)
+
+Starts only after **v1.0.0 is released** (Phase 7 DoD). Full design: `14-mcp-server-v2.md`.
+
+**Tasks (in order)**
+1. **Recon (needs the owner's browser/accounts):** for each of Gemini, ChatGPT, Claude, Perplexity record
+   the **search** UI (toggle or automatic? where do citations live? stream events?) and the **Deep
+   Research** flow (entry steps, clarifying questions?, plan gate?, progress area, running/cancel
+   controls, where the report renders, export-free extraction, typical duration, quota messages).
+   Determine **where Flash-Lite lives** (Gemini app picker vs AI Studio) and its practical limits
+   (24 h usage test). Save fixtures (`dom-research-*.html`, streams) like Phase 1; answer `14` §14 Q1–Q3
+   in `OPEN_QUESTIONS.md`.
+2. Extension: step DSL, `capabilities`/`modes` schema + validator, variant selection (`14` §9.4–9.5),
+   sources extraction (§9.6), lanes in the tab pool (§9.2), capability probing (§9.3). Unit + DOM
+   fixture tests. Gemini variant select + a utility-lane smoke first (smallest end-to-end slice).
+3. Protocol: new frames/fields/capabilities (`14` §10) on both sides + tests (fake extension scenarios).
+4. Bridge: lanes in router, `utility` model and fallback logic (`14` §4.2), `web2api.mode: search`,
+   `gemini/flash-lite`-style variant models in `/v1/models`.
+5. `mcp/server.py` (JSON-RPC, negotiation, schema validator), stdio adapter, Streamable HTTP adapter
+   with Origin/Host validation, `tasks` scope, `mcp` key + `mcp install` (all clients' templates).
+   Conformance tests against the official SDK client (dev-only) + stdio hygiene test.
+6. Tools: `list_providers`, `chat`, `web_search`, then `quick`, `commit_message` (+ secret scanner,
+   templates, parsers, validation/retry), `pr_description`, `summarize`, `generate_docs` (map-reduce).
+7. Research: TaskManager, guards, persistence, `deep_research`, `task_status` long-poll, `task_reply`,
+   `task_cancel`, `list_tasks`, `content/research.js` driver, reattach/resume.
+8. CLI companions: `commit`, `git-hook`, `docs`, `research`, `ask`; `doctor` MCP section.
+9. Prompts and resources (`14` §6–7).
+10. Docs: update `docs/mcp.md`, `docs/dev-tools.md`, `docs/research-and-search.md` to match reality;
+    compatibility matrix for MCP clients; CHANGELOG; release notes.
+11. Soak/chaos additions (`14` §13), then the release per `RELEASING.md`.
+
+**AC**
+- All tests in `14` §13 pass in CI; binaries pass the MCP conformance suite.
+- Manual: in Claude Code, `claude mcp add` (or `mcp install --write`) → tools appear; `/mcp__web2api__commit`
+  produces a valid Conventional-Commits message from a staged diff in ≤ 15 s (p95 of 20 runs) using the
+  utility lane, and a canary secret in the diff never reaches the provider page.
+- Manual: `web_search` returns a cited answer; `deep_research` on one provider runs end-to-end,
+  `task_status` long-polling works, `task_reply` approves a plan once, restart-then-`resume` recovers a
+  finished report.
+- `generate_docs kind=readme` on this repository's `extension/` produces a README that passes the
+  mechanical checks in `14` §5.5 step 5.
+- `/v1` conformance suite (`13` §3) still passes unchanged (no regression).
+
+**→ v2.0.0 release (follow `RELEASING.md`).**
+
+---
+
 ## Phase 8 — Tier-2 providers (v1.1, ~1 day per provider)
 
 For each of `deepseek`, `grok`, `perplexity`, `mistral`, `qwen`, `kimi`: follow `05` §6 (recon →
@@ -271,7 +318,7 @@ smoke three times. Gemini net tap can be attempted here too.
 | Firefox `webRequest.filterResponseData` net-tap transport | `04` §6.6 |
 | Anthropic Messages-compatible endpoint (`/v1/messages`) | — (mirror §6 of `07`) |
 | OpenAI Responses API (`/v1/responses`) adapter over the same job pipeline | `13` §2.1 |
-| MCP server | `11` |
+| MCP server | `14` (now Phase 10, v2.0.0) |
 | Maintainer agent | `11` |
 | Native Messaging transport | `03` D2 |
 
@@ -290,3 +337,4 @@ smoke three times. Gemini net tap can be attempted here too.
 | 6 Health + docs | 3 d |
 | 7 Productization | 4–6 d |
 | **v1.0 total** | **~22–31 working days** of focused implementation |
+| 10 MCP / research / utility lane (v2.0.0) | 12–18 d |

@@ -299,6 +299,15 @@ web2api/
     │   ├── paths.py                  # per-OS config/state dirs (stdlib only)
     │   ├── service.py                # service install/uninstall (systemd/launchd/schtasks) (12 §4)
     │   ├── doctor.py                 # doctor + support-bundle (12 §6)
+    │   ├── tasks.py                  # v2: TaskManager (deep research etc.), guards, persistence (14 §11)
+    │   ├── mcp/                      # v2.0.0: MCP server (14)
+    │   │   ├── server.py             # JSON-RPC 2.0, negotiation, stdio + Streamable HTTP adapters
+    │   │   ├── tools/                # chat, web_search, research, dev tools, list_providers
+    │   │   ├── workflows/            # commit message, map-reduce docs/summarize
+    │   │   ├── prompts/              # *.txt templates (shipped as package data)
+    │   │   ├── clients/              # per-client install snippets (json/toml templates)
+    │   │   ├── parsers.py, secrets.py, resources.py
+    │   │   └── cli.py                # mcp install, commit, docs, research, ask, git-hook
     │   ├── protocol.py               # message constants + frame builders/validators mirroring extension/src/shared/protocol.js
     │   ├── hub.py                    # connections, jobs, event routing, cancel, heartbeat
     │   ├── router.py                 # model id → provider/variant → connection

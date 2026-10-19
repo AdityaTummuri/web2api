@@ -538,6 +538,11 @@ All require an API key with the `admin` scope (`13` §1.3); key management endpo
 
 ---
 
+## 10a. v2.0.0 additions
+
+Tasks API, `web2api.mode`, the `utility` model, lanes, the `/mcp` endpoint and CLI companions are
+specified in `14` §2, §4, §11.
+
 ## 11. Migration from the prototype
 
 * `bridge_server.py` → replaced by `bridge/web2api_bridge/*`. Delete the root file at the end of

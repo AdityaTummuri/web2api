@@ -30,6 +30,7 @@ These came directly from the owner. Every design decision in this spec traces ba
 | R2 | **Do not restrict to Gemini.** Support all the major chat sites, like the inspo project does (ChatGPT, Claude, Gemini) and more. | `05-provider-adapters.md` |
 | R3 | **Assume the user has the browser open** and is logged in. No headless Playwright, no cookie stealing, no separate login flow. | `03-target-architecture.md` §3 |
 | R4 | Later, a **maintainer** using a real API will update the extension when a website changes. The extension must therefore be *maintainable by a machine*: selectors as data, health checks, DOM snapshots. | `05-provider-adapters.md` §2, `11-future-maintainer-and-mcp.md` |
+| R6 | **v2.0.0 = MCP server** that exploits browser-only features: Deep Research, built-in web search, and a near-free fast model (Flash-Lite) for commit messages / READMEs / docs. | `14-mcp-server-v2.md` |
 | R5 | The `inspo/` folder (formerly `legacy/`) is a friend's working project ("PromptRelay") that successfully extracts the latest chat response. Borrow its proven techniques. | `01-current-state-analysis.md` §3 |
 
 ## 3. Reading order
@@ -51,6 +52,7 @@ previous ones.
 | `09-testing-strategy.md` | Unit tests, DOM-fixture tests, live smoke tests, health checks. | Continuously. |
 | `10-implementation-plan.md` | **The ordered, step-by-step build plan** with acceptance criteria for each step. | This is your task list. Follow it in order. |
 | `11-future-maintainer-and-mcp.md` | What the future maintainer agent and MCP server will need, and the hooks you must build *now* so they are possible later. | Before finalising the protocol and config formats. |
+| `14-mcp-server-v2.md` | **Release v2.0.0:** the MCP server (chat, web search, Deep Research as tasks, a cheap "utility lane" for commit messages/PRs/README/docs), lanes, modes, variant selection, CLI companions. | After v1.0.0 is working; read §9–§11 when touching the extension/protocol. |
 | `13-api-keys-and-openai-compat.md` | OpenAI-style API keys (`sk-w2a-…`), scopes, rate limits, and the exact OpenAI compatibility contract + conformance suite. Supersedes the single API token in `07`/`08`. | Before building auth or the `/v1` endpoints. |
 | `12-product-and-distribution.md` | What makes this a dependable product rather than a prototype: footprint budgets, reliability engineering, binary + source distribution, service install, updates, diagnostics, CI/release, support policy. | Before Phase 3, and again before release. |
 

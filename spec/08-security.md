@@ -86,6 +86,15 @@ Middleware for HTTP **and** the WebSocket route: allowed `Host` values are `127.
   tools) does not allow impersonating the extension, and a key with only `chat` scope cannot reach the
   admin API.
 
+### 3.5a MCP key file (v2.0.0)
+
+Stdio MCP servers start non-interactively, so `web2api-bridge mcp install` stores a dedicated key
+(`mcp`, scopes `chat,tasks`, **no admin**) in plaintext at `<config>/mcp_key` (mode 0600). This is the
+only plaintext API key on disk; it is revocable (`keys revoke mcp`), narrow in scope, and never logged
+or included in the support bundle. MCP-specific controls (HTTP Origin/Host validation, secret scanner
+for code sent to providers, research quotas and loop breaker, untrusted-content labelling): `14` §2.1,
+§4.3, §5.3, §14.
+
 ### 3.6 Input limits
 
 * Max request body 5 MB (reject larger with 413).

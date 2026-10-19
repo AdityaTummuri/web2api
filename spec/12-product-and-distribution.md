@@ -274,6 +274,16 @@ Rules:
   removed.
 * Changelog (`CHANGELOG.md`, Keep a Changelog format) is updated in every PR that changes behaviour.
 
+### 7.0 Release lineup
+
+| Release | Content |
+|---|---|
+| **1.0.0** | OpenAI-compatible API + extension (Chrome, Firefox) + bridge (source and binary) — everything in `10` Phases 0–7 |
+| 1.x | Tier-2 providers, fixes, provider-config updates |
+| **2.0.0** | MCP server, tasks API, Deep Research, search mode, utility lane, CLI companions (`14`, `10` Phase 10). `/v1` stays backward compatible; protocol major stays 1 |
+
+The step-by-step runbook for cutting a release is `RELEASING.md` at the repo root.
+
 ### 7.1 Updating
 
 * **Extension:** via store auto-update (Chrome Web Store, AMO). Bundled provider configs update with

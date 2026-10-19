@@ -328,6 +328,9 @@ never reached the provider), at most once, on a different tab if available.
 
 ---
 
+> **v2.0.0 additions** (modes, lanes, `JOB_NEEDS_INPUT`, `JOB_INPUT`, `JOB_REATTACH`, sources, new
+> capabilities and error codes) are specified in `14` §10; protocol major stays 1.
+
 ## 8. Versioning rules
 
 * `protocolVersion` is an integer major version. Adding optional fields or new message types the other

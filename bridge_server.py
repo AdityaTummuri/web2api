@@ -4,25 +4,22 @@ Exposes an OpenAI-compatible REST API (and Web2API endpoints) that routes
 requests directly into your authenticated Firefox browser session via WebSocket.
 """
 
-import os
-import sys
-import time
-import json
-import uuid
 import asyncio
-from typing import Dict, List, Any, Optional
+import json
+import os
+import time
+import uuid
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 import uvicorn
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 app = FastAPI(
     title="Web2API Firefox Bridge Server",
     description="Transforms your live Firefox browser chat session into a high-speed OpenAI-compatible API.",
-    version="2.0.0"
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -34,17 +31,19 @@ app.add_middleware(
 )
 
 # Global Bridge Connection Hub
+
+
 class ExtensionBridgeHub:
     def __init__(self):
-        self.active_socket: Optional[WebSocket] = None
-        self.pending_requests: Dict[str, asyncio.Future] = {}
+        self.active_socket: WebSocket | None = None
+        self.pending_requests: dict[str, asyncio.Future] = {}
         self.lock = asyncio.Lock()
         self.stats = {
             "total_requests": 0,
             "successful_requests": 0,
             "failed_requests": 0,
             "connected_since": None,
-            "client_info": None
+            "client_info": None,
         }
 
     @property
@@ -63,15 +62,22 @@ class ExtensionBridgeHub:
         # Cancel any pending futures
         for req_id, future in self.pending_requests.items():
             if not future.done():
-                future.set_exception(HTTPException(status_code=503, detail="Firefox extension disconnected mid-request."))
+                future.set_exception(
+                    HTTPException(
+                        status_code=503,
+                        detail="Firefox extension disconnected mid-request.",
+                    )
+                )
         self.pending_requests.clear()
         print("[BRIDGE] Firefox Extension disconnected.")
 
-    async def dispatch_prompt(self, prompt: str, model: str = "gemini-pro", timeout: float = 120.0) -> dict:
+    async def dispatch_prompt(
+        self, prompt: str, model: str = "gemini-pro", timeout: float = 120.0
+    ) -> dict:
         if not self.is_connected:
             raise HTTPException(
                 status_code=503,
-                detail="Firefox Extension is not connected. Please open Firefox and ensure the Web2API Pro extension is active."
+                detail="Firefox Extension is not connected. Please open Firefox and ensure the Web2API Pro extension is active.",
             )
 
         req_id = f"req-{uuid.uuid4().hex[:12]}"
@@ -86,19 +92,24 @@ class ExtensionBridgeHub:
             "action": "CHAT",
             "prompt": prompt,
             "model": model,
-            "timeout": int(timeout * 1000)
+            "timeout": int(timeout * 1000),
         }
 
         try:
-            async with self.lock:  # Process prompts sequentially to ensure browser focus stability
+            async with (
+                self.lock
+            ):  # Process prompts sequentially to ensure browser focus stability
                 await self.active_socket.send_text(json.dumps(payload))
                 result = await asyncio.wait_for(future, timeout=timeout)
                 self.stats["successful_requests"] += 1
                 return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.stats["failed_requests"] += 1
-            raise HTTPException(status_code=504, detail=f"Request to Firefox chat session timed out after {timeout} seconds.")
-        except Exception as e:
+            raise HTTPException(
+                status_code=504,
+                detail=f"Request to Firefox chat session timed out after {timeout} seconds.",
+            )
+        except Exception:
             self.stats["failed_requests"] += 1
             raise
         finally:
@@ -106,19 +117,23 @@ class ExtensionBridgeHub:
 
     async def reset_thread(self) -> dict:
         if not self.is_connected:
-            raise HTTPException(status_code=503, detail="Firefox Extension is not connected.")
+            raise HTTPException(
+                status_code=503, detail="Firefox Extension is not connected."
+            )
         req_id = f"req-{uuid.uuid4().hex[:12]}"
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         self.pending_requests[req_id] = future
 
-        await self.active_socket.send_text(json.dumps({"id": req_id, "action": "RESET"}))
+        await self.active_socket.send_text(
+            json.dumps({"id": req_id, "action": "RESET"})
+        )
         try:
             return await asyncio.wait_for(future, timeout=10.0)
         finally:
             self.pending_requests.pop(req_id, None)
 
-    def resolve_response(self, req_id: str, data: dict, error: Optional[str] = None):
+    def resolve_response(self, req_id: str, data: dict, error: str | None = None):
         future = self.pending_requests.get(req_id)
         if not future or future.done():
             return
@@ -128,9 +143,12 @@ class ExtensionBridgeHub:
         else:
             future.set_result(data)
 
+
 hub = ExtensionBridgeHub()
 
 # WebSocket Endpoint for Firefox Extension
+
+
 @app.websocket("/ws")
 async def websocket_bridge(websocket: WebSocket):
     await websocket.accept()
@@ -153,31 +171,43 @@ async def websocket_bridge(websocket: WebSocket):
                 if status == "success":
                     hub.resolve_response(req_id, message.get("data", {}))
                 else:
-                    hub.resolve_response(req_id, {}, error=message.get("error", "Unknown error from extension"))
+                    hub.resolve_response(
+                        req_id,
+                        {},
+                        error=message.get("error", "Unknown error from extension"),
+                    )
     except WebSocketDisconnect:
         hub.disconnect()
     except Exception as e:
         print(f"[BRIDGE] WebSocket exception: {e}")
         hub.disconnect()
 
+
 # Pydantic Schemas
+
+
 class MessageItem(BaseModel):
     role: str
     content: str
 
+
 class OpenAIChatRequest(BaseModel):
     model: str = "gemini-pro"
-    messages: List[MessageItem]
-    temperature: Optional[float] = 0.7
-    stream: Optional[bool] = False
-    max_tokens: Optional[int] = None
+    messages: list[MessageItem]
+    temperature: float | None = 0.7
+    stream: bool | None = False
+    max_tokens: int | None = None
+
 
 class Web2ApiRequest(BaseModel):
     prompt: str
-    model: Optional[str] = "gemini-pro"
-    timeout: Optional[float] = 120.0
+    model: str | None = "gemini-pro"
+    timeout: float | None = 120.0
+
 
 # REST Endpoints
+
+
 @app.get("/health")
 @app.get("/status")
 async def get_status():
@@ -186,20 +216,42 @@ async def get_status():
         "extension_connected": hub.is_connected,
         "active_client": hub.stats.get("client_info"),
         "stats": hub.stats,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
+
 
 @app.get("/v1/models")
 async def list_models():
     return {
         "object": "list",
         "data": [
-            {"id": "gemini-pro", "object": "model", "owned_by": "web2api", "permission": []},
-            {"id": "gemini-1.5-pro", "object": "model", "owned_by": "web2api", "permission": []},
-            {"id": "gemini-1.5-flash", "object": "model", "owned_by": "web2api", "permission": []},
-            {"id": "gemini-pro-web", "object": "model", "owned_by": "web2api", "permission": []}
-        ]
+            {
+                "id": "gemini-pro",
+                "object": "model",
+                "owned_by": "web2api",
+                "permission": [],
+            },
+            {
+                "id": "gemini-1.5-pro",
+                "object": "model",
+                "owned_by": "web2api",
+                "permission": [],
+            },
+            {
+                "id": "gemini-1.5-flash",
+                "object": "model",
+                "owned_by": "web2api",
+                "permission": [],
+            },
+            {
+                "id": "gemini-pro-web",
+                "object": "model",
+                "owned_by": "web2api",
+                "permission": [],
+            },
+        ],
     }
+
 
 @app.post("/v1/chat/completions")
 async def openai_chat_completions(req: OpenAIChatRequest):
@@ -240,18 +292,20 @@ async def openai_chat_completions(req: OpenAIChatRequest):
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": response_data.get("text", "")
+                    "content": response_data.get("text", ""),
                 },
-                "finish_reason": "stop"
+                "finish_reason": "stop",
             }
         ],
         "usage": {
             "prompt_tokens": len(prompt_text) // 4,
             "completion_tokens": len(response_data.get("text", "")) // 4,
-            "total_tokens": (len(prompt_text) + len(response_data.get("text", ""))) // 4
+            "total_tokens": (len(prompt_text) + len(response_data.get("text", "")))
+            // 4,
         },
-        "latency_seconds": round(elapsed, 2)
+        "latency_seconds": round(elapsed, 2),
     }
+
 
 @app.post("/api/chat")
 async def web2api_chat(req: Web2ApiRequest):
@@ -259,7 +313,9 @@ async def web2api_chat(req: Web2ApiRequest):
     Simplified direct prompt endpoint.
     """
     start_time = time.time()
-    response_data = await hub.dispatch_prompt(req.prompt, model=req.model or "gemini-pro", timeout=req.timeout or 120.0)
+    response_data = await hub.dispatch_prompt(
+        req.prompt, model=req.model or "gemini-pro", timeout=req.timeout or 120.0
+    )
     elapsed = time.time() - start_time
 
     content = ""
@@ -272,8 +328,9 @@ async def web2api_chat(req: Web2ApiRequest):
         "response": content,
         "extracted": response_data.get("extracted", {}),
         "latency_seconds": round(elapsed, 2),
-        "status": "success"
+        "status": "success",
     }
+
 
 @app.post("/api/reset")
 async def reset_conversation():
@@ -282,6 +339,7 @@ async def reset_conversation():
     """
     res = await hub.reset_thread()
     return {"status": "success", "message": "Conversation thread reset", "details": res}
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))

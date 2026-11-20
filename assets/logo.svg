@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+  <defs>
+    <linearGradient id="web2apiGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="50%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <filter id="webGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#3b82f6" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Deep Obsidian Container -->
+  <rect width="160" height="160" rx="36" fill="#080c16" />
+  <rect x="2" y="2" width="156" height="156" rx="34" fill="none" stroke="#3b82f6" stroke-opacity="0.2" stroke-width="2" />
+
+  <!-- Browser Window Frame morphing into OpenAI-Compatible Terminal API Nodes -->
+  <g filter="url(#webGlow)">
+    <!-- Browser Window Outline -->
+    <rect x="34" y="36" width="92" height="66" rx="12" fill="none" stroke="url(#web2apiGrad)" stroke-width="3.5" />
+    <line x1="34" y1="52" x2="126" y2="52" stroke="#3b82f6" stroke-width="2" opacity="0.6" />
+    
+    <!-- Browser Tab Dots -->
+    <circle cx="44" cy="44" r="2.5" fill="#ef4444" />
+    <circle cx="52" cy="44" r="2.5" fill="#f59e0b" />
+    <circle cx="60" cy="44" r="2.5" fill="#10b981" />
+
+    <!-- Chat Prompt Input Bubble Inside Browser -->
+    <rect x="44" y="62" width="48" height="18" rx="6" fill="#3b82f6" fill-opacity="0.18" stroke="#60a5fa" stroke-width="1.5" />
+    <line x1="50" y1="71" x2="72" y2="71" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+
+    <!-- Local WebSocket API Bridge Tunnel Connector -->
+    <path d="M80 102 L80 126" stroke="url(#web2apiGrad)" stroke-width="3.5" stroke-linecap="round" />
+    
+    <!-- REST API Terminal Diamond Endpoint -->
+    <polygon points="80,118 90,126 80,134 70,126" fill="#06b6d4" />
+    <circle cx="80" cy="126" r="3" fill="#080c16" />
+  </g>
+</svg>

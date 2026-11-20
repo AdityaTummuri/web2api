@@ -1,6 +1,22 @@
-# Web2API
+<p align="center">
+  <img src="assets/logo.svg" alt="Web2API Logo" width="130" height="130" />
+</p>
 
-**Use the AI chat sites you're already logged into as a local, OpenAI-compatible API.**
+<h1 align="center">Web2API</h1>
+
+<p align="center">
+  <strong>Use Active Browser AI Chat Sessions (ChatGPT, Claude, Gemini) as a Local OpenAI-Compatible REST API</strong>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Interface-OpenAI%20Compatible-blue?style=flat-square" alt="API" />
+  <img src="https://img.shields.io/badge/Browser-Chrome%20%7C%20Firefox-orange?style=flat-square" alt="Browsers" />
+  <img src="https://img.shields.io/badge/Privacy-100%25%20Local%20Bridge-brightgreen?style=flat-square" alt="Privacy" />
+  <img src="https://img.shields.io/badge/Status-Maintained-success?style=flat-square" alt="Status" />
+  <img src="https://img.shields.io/badge/License-Protected-blue?style=flat-square" alt="License" />
+</p>
+
+---
 
 Web2API is a small browser extension (Chrome and Firefox) plus a tiny local program (the *bridge*).
 Your tools talk to the bridge exactly as they would talk to OpenAI; the extension relays each request

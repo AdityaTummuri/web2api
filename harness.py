@@ -132,16 +132,33 @@ class MockExtensionHarness:
                     break
 
     def _synthesize_response(self, prompt: str, model: str) -> dict:
-        if "AVAILABLE TOOLS" in prompt:
+        if "## AVAILABLE TOOLS\nYou have access to the following functions" in prompt:
             content = (
                 "```tool_call\n"
                 '{"name": "test_search", "arguments": {"query": "Web2API Architecture"}}\n'
                 "```"
             )
+        elif "DEEP RESEARCH & EXHAUSTIVE CITATION" in prompt:
+            content = (
+                f"# Deep Research Dossier: Comprehensive Analysis [{model}]\n\n"
+                "## 1. Executive Summary & Core Thesis\n"
+                "The target inquiry demonstrates high architectural impact across asynchronous networking, "
+                "browser extension message passing, and decoupled client microservices.\n\n"
+                "## 2. Technical & Architectural Breakdown\n"
+                "- **Protocol**: WebSocket loopback with JSON payload framing.\n"
+                "- **Concurrency**: Asyncio event loop with non-blocking futures and mutex serialization.\n"
+                "- **Resilience**: Dynamic JSON repair, regex token extraction, and graceful timeout escalation.\n\n"
+                "## 3. Multi-Perspective Findings & Citations\n"
+                "1. *IETF RFC 6455*: WebSockets provide bi-directional, full-duplex communication channels over a single TCP connection.\n"
+                "2. *W3C WebExtensions API*: Manifest V3 background service workers require persistent heartbeat keep-alives.\n\n"
+                "## 4. Strategic Recommendations\n"
+                "- Implement adaptive retry with exponential backoff on client disconnects.\n"
+                "- Partition tool execution sandboxes for high-concurrency workloads."
+            )
         else:
             content = (
                 f"Hello from Web2API Mock Harness [{model}]!\n\n"
-                f"Received prompt: \"{prompt}\"\n\n"
+                f"Received prompt: \"{prompt[:100]}...\"\n\n"
                 "```python\n"
                 "def answer():\n"
                 "    return 'Web2API Harness Connection Verified!'\n"

@@ -15,10 +15,9 @@ from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, Security, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from tool_parser import format_conversation_with_tools, parse_tool_calls
@@ -47,33 +46,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-security_bearer = HTTPBearer(auto_error=False)
+
+def get_allowed_api_keys() -> set:
+    """Returns set of allowed API keys from environment and api.txt."""
+    keys = set()
+    if API_KEY:
+        keys.add(API_KEY)
+    api_txt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api.txt")
+    if os.path.exists(api_txt_path):
+        try:
+            with open(api_txt_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    match = re.search(r"\b(sk-w2a-[A-Za-z0-9_-]+)\b", line)
+                    if match:
+                        keys.add(match.group(1))
+        except Exception:
+            pass
+    return keys
 
 
-async def verify_api_key(
-    request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
-):
+async def verify_api_key(request: Request):
     """
-    Optional API Key protection. If WEB2API_API_KEY / API_KEY is set in environment,
-    require valid Bearer token or 'X-API-Key' header.
+    API Key verification. Checks environment variables and api.txt.
+    Accepts 'Authorization: Bearer <key>' or 'X-API-Key: <key>'.
     """
-    if not API_KEY:
-        return True
+    allowed_keys = get_allowed_api_keys()
+    require_auth = bool(API_KEY or os.getenv("WEB2API_REQUIRE_AUTH", "").lower() in ("1", "true", "yes"))
 
-    # 1. Check Bearer token
-    if credentials and credentials.credentials == API_KEY:
-        return True
+    # 1. Extract provided token or X-API-Key
+    auth_header = request.headers.get("authorization", "")
+    token = None
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
 
-    # 2. Check X-API-Key header
     header_key = request.headers.get("x-api-key")
-    if header_key and header_key == API_KEY:
+    provided_key = token or header_key
+
+    # 2. If a key was provided, validate it against allowed keys
+    if provided_key:
+        if allowed_keys and provided_key not in allowed_keys:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized: Invalid API key.",
+            )
         return True
 
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Unauthorized: Invalid or missing API key. Provide 'Authorization: Bearer <KEY>' or 'X-API-Key: <KEY>'.",
-    )
+    # 3. If no key was provided, reject only if authentication is required
+    if require_auth:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: Invalid or missing API key. Provide 'Authorization: Bearer <KEY>' or 'X-API-Key: <KEY>'.",
+        )
+
+    return True
 
 
 # OpenAI-compatible & FastAPI error formatting
@@ -117,7 +142,9 @@ class ExtensionBridgeHub:
         self.stats["client_info"] = client_info or {}
         print(f"[BRIDGE] Extension successfully connected via WebSocket: {client_info}")
 
-    def disconnect(self):
+    def disconnect(self, websocket: Optional[WebSocket] = None):
+        if websocket is not None and self.active_socket != websocket:
+            return
         self.active_socket = None
         for req_id, future in self.pending_requests.items():
             if not future.done():
@@ -131,7 +158,7 @@ class ExtensionBridgeHub:
         print("[BRIDGE] Extension disconnected.")
 
     async def dispatch_prompt(
-        self, prompt: str, model: str = "gemini-pro", timeout: float = 120.0
+        self, prompt: str, model: str = "gemini-pro", timeout: float = 120.0, mode: Optional[str] = None
     ) -> dict:
         if not self.is_connected:
             raise HTTPException(
@@ -151,6 +178,7 @@ class ExtensionBridgeHub:
             "action": "CHAT",
             "prompt": prompt,
             "model": model,
+            "mode": mode,
             "timeout": int(timeout * 1000),
         }
 
@@ -244,10 +272,10 @@ async def websocket_bridge(websocket: WebSocket):
                         error=message.get("error", "Unknown error from extension"),
                     )
     except WebSocketDisconnect:
-        hub.disconnect()
+        hub.disconnect(websocket)
     except Exception as e:
         print(f"[BRIDGE] WebSocket exception: {e}")
-        hub.disconnect()
+        hub.disconnect(websocket)
 
 
 # Pydantic Schemas
@@ -296,7 +324,9 @@ async def list_models():
     return {
         "object": "list",
         "data": [
-            # Gemini
+            # Gemini & Deep Research
+            {"id": "gemini-deep-research", "object": "model", "owned_by": "google", "permission": []},
+            {"id": "deep-research", "object": "model", "owned_by": "web2api", "permission": []},
             {"id": "gemini-pro", "object": "model", "owned_by": "google", "permission": []},
             {"id": "gemini-1.5-pro", "object": "model", "owned_by": "google", "permission": []},
             {"id": "gemini-1.5-flash", "object": "model", "owned_by": "google", "permission": []},
@@ -525,8 +555,24 @@ async def openai_chat_completions(req: OpenAIChatRequest, raw_request: Request):
             formatted.append(f"[{role}]: {content_val}")
         prompt_text = "\n\n".join(formatted) + "\n\n[Assistant]:"
 
+    # Deep Research directive injection for Gemini & deep-research models
+    is_deep_research = "deep-research" in req.model.lower() or req.model.lower() == "gemini-deep-research"
+    if is_deep_research:
+        deep_directive = (
+            "[SYSTEM DIRECTIVE: DEEP RESEARCH & EXHAUSTIVE CITATION MODE]\n"
+            "Conduct exhaustive, multi-perspective in-depth research on the following user query.\n"
+            "Structure your output as an authoritative, publication-ready research dossier:\n"
+            "- Executive Summary & Core Thesis\n"
+            "- Deep Technical & Architectural Analysis\n"
+            "- Empirical Evidence, Real-world Citations & Nuances\n"
+            "- Multi-angle Trade-offs & Counter-Arguments\n"
+            "- Strategic Findings & Actionable Recommendations\n\n"
+        )
+        prompt_text = deep_directive + prompt_text
+
     start_time = time.time()
-    response_data = await hub.dispatch_prompt(prompt_text, model=req.model)
+    mode = "deep-research" if is_deep_research else None
+    response_data = await hub.dispatch_prompt(prompt_text, model=req.model, mode=mode)
     elapsed = time.time() - start_time
     created_ts = int(time.time())
     chat_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"

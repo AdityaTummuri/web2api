@@ -431,6 +431,23 @@
           const initialMessages = findAllElements(selectors.messages);
           const initialCount = initialMessages.length;
 
+          // Deep Research activation for Gemini & research modes
+          if (request.model && (request.model.includes("deep-research") || request.mode === "deep-research")) {
+            try {
+              const researchButtons = document.querySelectorAll(
+                'button[aria-label*="Deep Research" i], button[aria-label*="research" i], [data-test-id*="deep-research"], [aria-label*="Tools" i]'
+              );
+              for (const btn of researchButtons) {
+                if (isElementVisible(btn) && btn.getAttribute("aria-pressed") !== "true") {
+                  btn.click();
+                  await new Promise(r => setTimeout(r, 300));
+                }
+              }
+            } catch (e) {
+              console.warn("[Web2API] Deep Research toggle attempt:", e);
+            }
+          }
+
           // 1. Type and dispatch prompt
           await typePrompt(request.prompt);
 

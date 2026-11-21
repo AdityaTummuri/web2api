@@ -18,6 +18,10 @@ __pycache__/
 *.png
 .pytest_cache/
 
+# Extension build artifacts
+extension/dist/
+*.xpi
+
 # Node.js dependencies (extension)
 extension/node_modules/
 

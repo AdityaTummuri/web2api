@@ -1,6 +1,6 @@
 /**
- * Web2API Firefox Extension - Content Script
- * Directly automates the chat web interface (Gemini/ChatGPT/Claude) in the user's real browser session.
+ * Web2API Pro Firefox / Zen Extension - Content Script
+ * Directly automates the chat web interfaces (Gemini, ChatGPT, Claude) in the user's authentic browser session.
  * Types prompts, observes streaming generation, preserves code blocks, and returns clean API responses.
  */
 
@@ -10,12 +10,14 @@
 
   console.log("[Web2API] Content script loaded on:", window.location.href);
 
-  // Configuration & Selectors
+  // Platform Selector Registry
   const SELECTORS = {
     gemini: {
       input: [
+        'rich-textarea div[contenteditable="true"]',
         'div[contenteditable="true"]',
-        'rich-textarea [contenteditable="true"]',
+        'div.ql-editor[contenteditable="true"]',
+        'div[role="textbox"][contenteditable="true"]',
         'textarea',
         '[data-placeholder*="Ask"]'
       ],
@@ -29,13 +31,15 @@
       stopButton: [
         'button[aria-label*="Stop" i]',
         'button[aria-label*="stop" i]',
-        '[data-test-id="stop-button"]'
+        '[data-test-id="stop-button"]',
+        'mat-icon[data-mat-icon-name="stop"]'
       ],
       messages: [
         'message-content',
         '.message-content',
         'model-response',
         '.model-response-text',
+        '.response-container',
         'article'
       ],
       newChat: [
@@ -45,32 +49,117 @@
         'button:has-text("New chat")'
       ]
     },
+    chatgpt: {
+      input: [
+        '#prompt-textarea',
+        'div[id="prompt-textarea"][contenteditable="true"]',
+        'textarea[data-id="root"]',
+        'div[contenteditable="true"][data-placeholder]',
+        'textarea'
+      ],
+      sendButton: [
+        'button[data-testid="send-button"]',
+        'button[aria-label*="Send" i]',
+        'button[aria-label*="submit" i]'
+      ],
+      stopButton: [
+        'button[data-testid="stop-button"]',
+        'button[aria-label*="Stop" i]'
+      ],
+      messages: [
+        '[data-message-author-role="assistant"]',
+        'div.agent-turn',
+        'article',
+        '.markdown'
+      ],
+      newChat: [
+        'a[href="/"]',
+        'button[aria-label*="New chat" i]',
+        '[data-testid="new-chat-button"]'
+      ]
+    },
+    claude: {
+      input: [
+        'div[contenteditable="true"].ProseMirror',
+        'div[data-testid="chat-input"] [contenteditable="true"]',
+        'fieldset div[contenteditable="true"]',
+        'div[contenteditable="true"]'
+      ],
+      sendButton: [
+        'button[aria-label*="Send Message" i]',
+        'button[aria-label*="Send message" i]',
+        'button[aria-label*="Send" i]',
+        'fieldset button:not([disabled])'
+      ],
+      stopButton: [
+        'button[aria-label*="Stop" i]',
+        'button[data-testid="stop-generating"]'
+      ],
+      messages: [
+        '[data-is-streaming]',
+        '.font-claude-message',
+        'div[data-testid="chat-message"]',
+        '.grid-cols-1 .whitespace-pre-wrap',
+        'article'
+      ],
+      newChat: [
+        'a[href="/new"]',
+        'button[aria-label*="Start new chat" i]',
+        'button[aria-label*="New chat" i]'
+      ]
+    },
     generic: {
-      input: ['textarea', 'div[contenteditable="true"]', '[role="textbox"]'],
-      sendButton: ['button[type="submit"]', 'button[aria-label*="Send" i]'],
-      stopButton: ['button[aria-label*="Stop" i]'],
-      messages: ['article', '.message', '[data-message-author-role="assistant"]'],
-      newChat: ['button[aria-label*="New chat" i]']
+      input: [
+        'div[role="textbox"][contenteditable="true"]',
+        'div[contenteditable="true"]',
+        'textarea',
+        'input[type="text"]'
+      ],
+      sendButton: [
+        'button[type="submit"]',
+        'button[aria-label*="Send" i]',
+        'button[aria-label*="Submit" i]'
+      ],
+      stopButton: [
+        'button[aria-label*="Stop" i]'
+      ],
+      messages: [
+        'article',
+        '.message',
+        '[data-message-author-role="assistant"]'
+      ],
+      newChat: [
+        'button[aria-label*="New chat" i]'
+      ]
     }
   };
 
-  function getPlatformSelectors() {
+  function detectPlatform() {
     const host = window.location.hostname;
-    if (host.includes("gemini.google.com")) return SELECTORS.gemini;
-    return SELECTORS.generic;
+    if (host.includes("gemini.google.com")) return "gemini";
+    if (host.includes("chatgpt.com") || host.includes("openai.com")) return "chatgpt";
+    if (host.includes("claude.ai")) return "claude";
+    return "generic";
+  }
+
+  function getPlatformSelectors() {
+    const p = detectPlatform();
+    return SELECTORS[p] || SELECTORS.generic;
   }
 
   function findElement(selectorList, parent = document) {
+    if (!selectorList) return null;
     for (const sel of selectorList) {
       try {
         const el = parent.querySelector(sel);
-        if (el) return el;
+        if (el && isElementVisible(el)) return el;
       } catch (e) {}
     }
     return null;
   }
 
   function findAllElements(selectorList, parent = document) {
+    if (!selectorList) return [];
     for (const sel of selectorList) {
       try {
         const list = parent.querySelectorAll(sel);
@@ -80,59 +169,131 @@
     return [];
   }
 
+  function isElementVisible(el) {
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+  }
+
   /**
-   * Simulates realistic human typing and framework events so Angular/React registers input
+   * Resilient text insertion handling ProseMirror (Claude), Lexical (ChatGPT),
+   * Angular Quill (Gemini), and standard textareas.
    */
   async function typePrompt(text) {
     const selectors = getPlatformSelectors();
     const inputEl = findElement(selectors.input);
 
     if (!inputEl) {
-      throw new Error("Chat input box not found. Ensure you are on a supported chat page and logged in.");
+      throw new Error(`Chat input box not found on ${detectPlatform().toUpperCase()}. Ensure you are logged in and on the chat page.`);
     }
 
     inputEl.focus();
 
-    if (inputEl.isContentEditable) {
-      // ContentEditable (Gemini rich-textarea)
-      inputEl.innerHTML = "";
-      const p = document.createElement("p");
-      p.textContent = text;
-      inputEl.appendChild(p);
+    const isEditable = inputEl.isContentEditable || inputEl.getAttribute("contenteditable") === "true";
 
-      // Trigger events
+    if (isEditable) {
+      // 1. Synthetic ClipboardEvent: ProseMirror & Lexical handle this cleanly
+      let inserted = false;
+      try {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", text);
+        const pasteEvent = new ClipboardEvent("paste", {
+          clipboardData: dt,
+          bubbles: true,
+          cancelable: true
+        });
+        const prevented = !inputEl.dispatchEvent(pasteEvent);
+        if (prevented || inputEl.textContent.includes(text.slice(0, Math.min(20, text.length)))) {
+          inserted = true;
+        }
+      } catch (e) {
+        console.warn("[Web2API] Synthetic paste fallback:", e);
+      }
+
+      // 2. Fallback: execCommand('insertText')
+      if (!inserted) {
+        try {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(inputEl);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          inserted = document.execCommand("insertText", false, text);
+        } catch (e) {}
+      }
+
+      // 3. Fallback: Direct DOM node insertion + InputEvent
+      if (!inserted || !inputEl.textContent.trim()) {
+        inputEl.innerHTML = "";
+        const p = document.createElement("p");
+        p.textContent = text;
+        inputEl.appendChild(p);
+
+        inputEl.dispatchEvent(new InputEvent("input", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: text
+        }));
+      }
+
+      // Framework trigger events
       inputEl.dispatchEvent(new Event("beforeinput", { bubbles: true, composed: true }));
       inputEl.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
       inputEl.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
       inputEl.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "End" }));
     } else {
       // Standard textarea
-      inputEl.value = text;
+      inputEl.focus();
+      let inserted = false;
+      try {
+        inserted = document.execCommand("insertText", false, text);
+      } catch (e) {}
+
+      if (!inserted) {
+        inputEl.value = text;
+      }
+
       inputEl.dispatchEvent(new Event("input", { bubbles: true }));
       inputEl.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
-    // Small delay to allow Angular/React UI state to update send button disabled state
-    await new Promise(r => setTimeout(r, 200));
-
-    // Try finding send button
-    let sendBtn = findElement(selectors.sendButton);
-    if (sendBtn && !sendBtn.disabled) {
-      // If found parent button from inner icon
-      if (sendBtn.tagName.toLowerCase() !== "button") {
-        sendBtn = sendBtn.closest("button") || sendBtn;
+    // Wait for framework state to enable the send button
+    let sendBtn = null;
+    const btnStartTime = Date.now();
+    while (Date.now() - btnStartTime < 1500) {
+      sendBtn = findElement(selectors.sendButton);
+      if (sendBtn) {
+        if (sendBtn.tagName.toLowerCase() !== "button") {
+          sendBtn = sendBtn.closest("button") || sendBtn;
+        }
+        const isDisabled = sendBtn.disabled || sendBtn.getAttribute("aria-disabled") === "true";
+        if (!isDisabled) {
+          break;
+        }
       }
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    // Click send button if ready
+    if (sendBtn && !sendBtn.disabled && sendBtn.getAttribute("aria-disabled") !== "true") {
+      sendBtn.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+      sendBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+      sendBtn.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
       sendBtn.click();
     } else {
-      // Fallback: Send Enter key
-      const enterDown = new KeyboardEvent("keydown", {
+      // Fallback: Dispatch Enter key event
+      const enterOptions = {
         bubbles: true,
         cancelable: true,
         key: "Enter",
         code: "Enter",
+        which: 13,
         keyCode: 13
-      });
-      inputEl.dispatchEvent(enterDown);
+      };
+      inputEl.dispatchEvent(new KeyboardEvent("keydown", enterOptions));
+      inputEl.dispatchEvent(new KeyboardEvent("keypress", enterOptions));
+      inputEl.dispatchEvent(new KeyboardEvent("keyup", enterOptions));
     }
   }
 
@@ -143,9 +304,9 @@
     const selectors = getPlatformSelectors();
     const startTime = Date.now();
 
-    // Wait until response container appears or stop button is visible
     let targetMessage = null;
 
+    // Step 1: Wait until a new response starts streaming or message container appears
     while (Date.now() - startTime < 15000) {
       const messages = findAllElements(selectors.messages);
       if (messages.length > initialMessageCount) {
@@ -154,18 +315,16 @@
       }
       const stopBtn = findElement(selectors.stopButton);
       if (stopBtn) {
-        // Response is actively streaming
         const latestMsgs = findAllElements(selectors.messages);
         if (latestMsgs.length > 0) {
           targetMessage = latestMsgs[latestMsgs.length - 1];
           break;
         }
       }
-      await new Promise(r => setTimeout(r, 250));
+      await new Promise(r => setTimeout(r, 200));
     }
 
     if (!targetMessage) {
-      // Fallback to the latest message element available
       const msgs = findAllElements(selectors.messages);
       if (msgs.length > 0) {
         targetMessage = msgs[msgs.length - 1];
@@ -174,39 +333,48 @@
       }
     }
 
-    // Stabilization engine: Poll DOM text until it stabilizes and stop button is gone
+    // Step 2: Stabilization engine - Poll DOM text until it stabilizes and stop button disappears
     let lastText = "";
     let stableSince = Date.now();
     const STABILIZATION_DELAY = 1200; // ms of unchanged text required
 
     while (Date.now() - startTime < timeoutMs) {
-      const currentRawText = targetMessage.innerText || targetMessage.textContent || "";
+      // Re-query latest message in case container was re-rendered
+      const currentMsgs = findAllElements(selectors.messages);
+      if (currentMsgs.length > 0) {
+        targetMessage = currentMsgs[currentMsgs.length - 1];
+      }
+
+      const currentRawText = (targetMessage.innerText || targetMessage.textContent || "").trim();
       const stopBtn = findElement(selectors.stopButton);
 
       if (currentRawText !== lastText) {
         lastText = currentRawText;
         stableSince = Date.now();
-      } else {
-        // Text is steady; check if stabilization window has passed and no stop button
+      } else if (currentRawText.length > 0) {
         const elapsedSteady = Date.now() - stableSince;
         if (elapsedSteady >= STABILIZATION_DELAY && !stopBtn) {
-          // Double-check send button is re-enabled
           const sendBtn = findElement(selectors.sendButton);
-          if (!sendBtn || !sendBtn.disabled || elapsedSteady >= 2500) {
-            break; // Successfully completed!
+          const sendReady = !sendBtn || (!sendBtn.disabled && sendBtn.getAttribute("aria-disabled") !== "true");
+          if (sendReady || elapsedSteady >= 2500) {
+            break; // Finished streaming!
           }
         }
       }
 
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 250));
     }
 
-    // Convert target message DOM to clean markdown with preserved code blocks
+    // Step 3: Convert target message DOM to clean markdown with preserved code blocks
     let markdown = "";
     if (window.Web2APIParser && typeof window.Web2APIParser.domToMarkdown === "function") {
       markdown = window.Web2APIParser.domToMarkdown(targetMessage);
     } else {
       markdown = (targetMessage.innerText || targetMessage.textContent || "").trim();
+    }
+
+    if (!markdown && lastText) {
+      markdown = lastText;
     }
 
     return markdown;
@@ -220,15 +388,17 @@
     const newChatBtn = findElement(selectors.newChat);
     if (newChatBtn) {
       newChatBtn.click();
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 800));
       return true;
     }
-    // Alternatively navigate to base app URL
-    window.location.href = "https://gemini.google.com/app";
+    const platform = detectPlatform();
+    if (platform === "gemini") window.location.href = "https://gemini.google.com/app";
+    else if (platform === "chatgpt") window.location.href = "https://chatgpt.com/";
+    else if (platform === "claude") window.location.href = "https://claude.ai/new";
     return true;
   }
 
-  // Handle incoming commands from background script or popup
+  // Cross-browser runtime listener
   const runtime = typeof browser !== "undefined" ? browser.runtime : chrome.runtime;
 
   runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -239,6 +409,7 @@
       const input = findElement(selectors.input);
       sendResponse({
         status: "ok",
+        platform: detectPlatform(),
         url: window.location.href,
         inputReady: !!input,
         title: document.title
@@ -271,7 +442,7 @@
           if (window.Web2APIParser) {
             apiResponse = window.Web2APIParser.normalizeToApiResponse(markdownOutput, {
               prompt: request.prompt,
-              model: request.model || "gemini-pro-web"
+              model: request.model || `${detectPlatform()}-web-pro`
             });
           } else {
             apiResponse = {
@@ -279,13 +450,13 @@
             };
           }
 
-          sendResponse({ success: true, data: apiResponse });
+          sendResponse({ success: true, data: apiResponse, platform: detectPlatform() });
         } catch (err) {
           console.error("[Web2API] Prompt execution failed:", err);
-          sendResponse({ success: false, error: err.message });
+          sendResponse({ success: false, error: err.message, platform: detectPlatform() });
         }
       })();
-      return true; // Keep channel open for async response
+      return true;
     }
   });
 })();

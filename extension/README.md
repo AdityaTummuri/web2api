@@ -1,16 +1,18 @@
-# Web2API Pro — Firefox Extension & Local API Bridge
+# Web2API Pro — Firefox & Zen Browser Extension
 
-Transforms your real, authenticated Firefox browser chat session (Google Gemini) into a pro-grade, OpenAI-compatible REST API. Bypasses cloud API fees, rate limits, and headless bot detection by leveraging your native browser session.
+Transforms your real, authenticated Firefox / Zen browser chat sessions (**Gemini**, **ChatGPT**, **Claude**) into a pro-grade, OpenAI-compatible local API. Bypasses cloud API fees, rate limits, and Cloudflare/bot challenges by automating the native browser tab you are already logged into.
 
 ---
 
 ## Key Features
 
-- **Zero Bot Detection**: Runs in your daily Firefox profile with genuine cookies, headers, and canvas fingerprints.
-- **Deep Code-Block Parsing**: Extracts code snippets with language tags (`python`, `rust`, `javascript`, etc.), cleans DOM artifacts, preserves indentation, and produces pristine Markdown.
-- **Structured Output & Tool Calling**: Includes regex and JSON schema extractors to parse tool calls (`<tool_call>...`, `call:fn()`) and structured JSON outputs directly from the chat stream.
-- **OpenAI-Compatible Endpoint**: Serves `POST /v1/chat/completions` directly compatible with LangChain, LlamaIndex, Cursor, AutoGen, and curl.
-- **Live Developer Console**: Firefox popup with connection badges, prompt tester, latency timer, and multi-format viewer (OpenAI JSON, Code Only, Raw Markdown).
+- **Zen Browser & Firefox Native**: Optimized for Zen Browser (Mozilla Gecko engine) and standard Firefox (ESR 109+, Firefox 128+).
+- **Multi-Provider Support**: Seamlessly bridges **Google Gemini**, **OpenAI ChatGPT**, and **Anthropic Claude**.
+- **Zero Bot Detection**: Uses your genuine browser session, authenticated cookies, and real canvas/WebGL fingerprints.
+- **Auto-Injection & Healing**: Detects existing open tabs and dynamically injects content automation scripts without requiring tab reloads.
+- **Deep Code-Block & Markdown Parser**: Extracts language-tagged code snippets, cleans UI artifacts, preserves indentation, and normalizes output into OpenAI chat completion structures.
+- **OpenAI-Compatible Endpoint**: Serves `POST /v1/chat/completions` directly compatible with Cursor, Continue, LangChain, LlamaIndex, AutoGen, and `curl`.
+- **Live Pro Console Popup**: Built-in developer popup with bridge connection indicator, provider switcher, prompt playground, latency metrics, and cURL generator.
 
 ---
 
@@ -18,33 +20,44 @@ Transforms your real, authenticated Firefox browser chat session (Google Gemini)
 
 ```
 extension/
-├── manifest.json       # WebExtension Manifest (Firefox MV2/MV3)
+├── manifest.json       # WebExtension Manifest (Firefox / Zen compliant)
 ├── parser.js           # AST / DOM to Markdown & Structured Extractor
-├── content.js          # Direct DOM injector & stream observer for Gemini
-├── background.js       # Background service & WebSocket bridge client
+├── content.js          # Direct DOM injector & stream observer (Gemini, ChatGPT, Claude)
+├── background.js       # Background WebSocket bridge client & tab router
 ├── popup.html          # Pro Developer Console popup
 ├── popup.css           # Glassmorphic dark UI styling
-├── popup.js            # Controller for tester, status, and clipboard actions
+├── popup.js            # Controller for tester, tab switching, and bridge status
+├── build.js            # Automated packager (generates web2api-firefox.xpi)
+├── test_parser.js      # Unit tests for code block and tool extraction
+├── web2api-firefox.xpi # Packaged add-on ready to install in Zen / Firefox
 └── icons/              # Extension icons (48px, 96px)
 ```
 
 ---
 
-## 🚀 Quick Setup & Installation
+## 🚀 Quick Setup in Zen Browser / Firefox
 
-### Step 1: Install Extension in Firefox
-1. Open Firefox and type `about:debugging#/runtime/this-firefox` into the address bar.
+### Step 1: Install Extension in Zen / Firefox
+1. In Zen Browser, navigate to:
+   ```
+   about:debugging#/runtime/this-firefox
+   ```
 2. Click **"Load Temporary Add-on..."**.
-3. Select `manifest.json` located inside this directory:
-   `/mnt/shared/web2api/extension/manifest.json`
-4. The **Web2API Pro** icon (⚡) will appear in your Firefox toolbar.
+3. Select either:
+   - The manifest file: `/home/suzaykid/Projects/web2api/extension/manifest.json`
+   - Or the pre-packaged XPI: `/home/suzaykid/Projects/web2api/extension/web2api-firefox.xpi`
+4. The **Web2API Pro** icon (⚡) will appear in your Zen toolbar.
 
-### Step 2: Open Gemini in Firefox
-1. Navigate to [gemini.google.com/app](https://gemini.google.com/app).
-2. Ensure you are signed into your Google account. (You can keep this tab pinned or open in the background).
+### Step 2: Open Chat Tabs in Zen
+Open and sign into your desired AI chat sites in Zen:
+- **Gemini**: [gemini.google.com/app](https://gemini.google.com/app)
+- **ChatGPT**: [chatgpt.com](https://chatgpt.com/)
+- **Claude**: [claude.ai/new](https://claude.ai/new)
+
+*(You can keep these tabs pinned or running in the background).*
 
 ### Step 3: Launch the Local Bridge Server
-From the project root:
+From the repository root:
 ```bash
 ./start.sh bridge
 ```
@@ -53,13 +66,13 @@ From the project root:
 uv run python3 bridge_server.py
 ```
 
-The bridge server will start at `http://127.0.0.1:8000` with WebSocket endpoint `ws://127.0.0.1:8000/ws`. The Firefox extension connects automatically!
+The bridge server will start at `http://127.0.0.1:8000` with WebSocket endpoint `ws://127.0.0.1:8000/ws`. The extension connects automatically!
 
 ---
 
 ## 📡 API Usage Examples
 
-### 1. OpenAI-Compatible Chat Completion (`/v1/chat/completions`)
+### 1. Standard OpenAI Chat Completion (`/v1/chat/completions`)
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/chat/completions \
@@ -104,7 +117,7 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
 }
 ```
 
-### 2. Simple Prompt Endpoint (`/api/chat`)
+### 2. Simple Direct Chat Endpoint (`/api/chat`)
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/chat \
@@ -120,13 +133,15 @@ curl -X POST http://127.0.0.1:8000/api/reset
 
 ---
 
-## 🧪 Browser Popup Testing
-1. Click the **Web2API Pro** icon (⚡) in Firefox.
-2. Confirm the badges display:
-   - `Bridge: Connected` (Green)
-   - `Tab: Ready` (Green)
-3. Type a prompt in the textarea and click **Run Prompt**.
-4. Switch views between:
-   - **OpenAI JSON**: Complete payload with usage and token estimation.
-   - **Code Blocks Only**: Isolated code snippets ready for copy/paste.
-   - **Raw Markdown**: Clean markdown representation.
+## 🛠 Rebuilding & Packaging
+
+To run unit tests:
+```bash
+npm test
+```
+
+To re-package the `.xpi`:
+```bash
+npm run build
+```
+This updates both `web2api-firefox.xpi` and `dist/firefox/`.

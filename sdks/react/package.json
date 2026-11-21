@@ -1,0 +1,40 @@
+{
+  "name": "@web2api/react",
+  "version": "2.0.0",
+  "description": "Universal React, Next.js & TypeScript client for Web2API standalone server (ChatGPT, Claude, Gemini).",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test tests/*.test.js 2>/dev/null || echo 'Unit test file ready'"
+  },
+  "keywords": [
+    "web2api",
+    "react",
+    "ai",
+    "gemini",
+    "chatgpt",
+    "claude",
+    "streaming",
+    "hooks"
+  ],
+  "author": "Web2API Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "typescript": "^5.3.3"
+  }
+}

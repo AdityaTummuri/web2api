@@ -1,59 +1,98 @@
 /**
- * Web2API Firefox Extension - Background Script
+ * Web2API Firefox / Zen Extension - Background Script
  * Serves as the central bridge between external API clients (via local WebSocket)
- * and the active Gemini chat tab.
+ * and active browser AI chat tabs (Gemini, ChatGPT, Claude).
  */
 
-// Cross-browser compatibility shim (Firefox supports both browser and chrome)
 const ext = typeof browser !== "undefined" ? browser : chrome;
+
+// Supported Platform Configurations
+const PLATFORMS = {
+  gemini: {
+    id: "gemini",
+    name: "Gemini",
+    matches: ["*://gemini.google.com/*"],
+    url: "https://gemini.google.com/app",
+    modelKeywords: ["gemini"]
+  },
+  chatgpt: {
+    id: "chatgpt",
+    name: "ChatGPT",
+    matches: ["*://chatgpt.com/*", "*://chat.openai.com/*"],
+    url: "https://chatgpt.com/",
+    modelKeywords: ["gpt", "chatgpt", "o1", "o3"]
+  },
+  claude: {
+    id: "claude",
+    name: "Claude",
+    matches: ["*://claude.ai/*"],
+    url: "https://claude.ai/new",
+    modelKeywords: ["claude", "sonnet", "haiku", "opus"]
+  }
+};
 
 // State
 let ws = null;
 let wsConnected = false;
-let bridgeUrls = ["ws://127.0.0.1:8000/ws", "ws://127.0.0.1:8765"];
-let currentUrlIndex = 0;
+let currentBridgeUrl = "ws://127.0.0.1:8000/ws";
+const candidateBridgeUrls = [
+  "ws://127.0.0.1:8000/ws",
+  "ws://127.0.0.1:8787/ws/extension",
+  "ws://127.0.0.1:8787/ws",
+  "ws://127.0.0.1:8765"
+];
+let candidateIndex = 0;
 let reconnectTimer = null;
-let currentChatTabId = null;
 
 // Stats
 const stats = {
   totalRequests: 0,
   successfulRequests: 0,
   failedRequests: 0,
-  lastRequestTime: null
+  lastRequestTime: null,
+  activePlatform: null
 };
 
-// Target URL pattern
-const CHAT_URL_PATTERN = "*://gemini.google.com/*";
-const DEFAULT_CHAT_URL = "https://gemini.google.com/app";
+/**
+ * Initialize bridge URL from storage or fallback list
+ */
+async function getTargetBridgeUrl() {
+  try {
+    const data = await ext.storage.local.get("customBridgeUrl");
+    if (data && data.customBridgeUrl) {
+      return data.customBridgeUrl;
+    }
+  } catch (e) {}
+  return candidateBridgeUrls[candidateIndex];
+}
 
 /**
  * Connect to the local Web2API bridge server via WebSocket
  */
-function connectBridge() {
+async function connectBridge() {
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
     return;
   }
 
-  const wsUrl = bridgeUrls[currentUrlIndex];
-  console.log(`[Web2API Background] Attempting connection to bridge at ${wsUrl}...`);
+  currentBridgeUrl = await getTargetBridgeUrl();
+  console.log(`[Web2API Background] Connecting to bridge at ${currentBridgeUrl}...`);
 
   try {
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket(currentBridgeUrl);
 
     ws.onopen = () => {
-      console.log(`[Web2API Background] Connected to bridge at ${wsUrl}`);
+      console.log(`[Web2API Background] Connected successfully to ${currentBridgeUrl}`);
       wsConnected = true;
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
-      // Send handshake
       ws.send(JSON.stringify({
         type: "HANDSHAKE",
         client: "firefox-extension",
+        browser: "firefox-zen",
         version: "2.0.0",
-        endpoint: wsUrl
+        endpoint: currentBridgeUrl
       }));
     };
 
@@ -69,17 +108,17 @@ function connectBridge() {
 
     ws.onclose = () => {
       wsConnected = false;
-      currentUrlIndex = (currentUrlIndex + 1) % bridgeUrls.length;
+      candidateIndex = (candidateIndex + 1) % candidateBridgeUrls.length;
       scheduleReconnect();
     };
 
-    ws.onerror = (err) => {
+    ws.onerror = () => {
       wsConnected = false;
       try { ws.close(); } catch (e) {}
     };
   } catch (err) {
     wsConnected = false;
-    currentUrlIndex = (currentUrlIndex + 1) % bridgeUrls.length;
+    candidateIndex = (candidateIndex + 1) % candidateBridgeUrls.length;
     scheduleReconnect();
   }
 }
@@ -94,36 +133,100 @@ function scheduleReconnect() {
 }
 
 /**
- * Finds an open Gemini tab or creates one if none exists
+ * Ensures content script is injected even into tabs opened before the extension was loaded
  */
-async function getOrCreateChatTab() {
-  const tabs = await ext.tabs.query({ url: CHAT_URL_PATTERN });
+async function ensureContentScriptInjected(tabId) {
+  try {
+    const ping = await ext.tabs.sendMessage(tabId, { action: "PING" });
+    if (ping && ping.status === "ok") return true;
+  } catch (e) {}
 
-  if (tabs && tabs.length > 0) {
-    currentChatTabId = tabs[0].id;
-    return tabs[0];
+  // Tab does not have content script yet; inject dynamically
+  try {
+    if (ext.scripting && ext.scripting.executeScript) {
+      await ext.scripting.executeScript({
+        target: { tabId },
+        files: ["parser.js", "content.js"]
+      });
+    } else if (ext.tabs.executeScript) {
+      await ext.tabs.executeScript(tabId, { file: "parser.js" });
+      await ext.tabs.executeScript(tabId, { file: "content.js" });
+    }
+    // Give script a moment to initialize
+    await new Promise(r => setTimeout(r, 200));
+    return true;
+  } catch (err) {
+    console.warn("[Web2API Background] Dynamic injection failed for tab:", tabId, err);
+    return false;
+  }
+}
+
+/**
+ * Resolve target platform based on requested model name
+ */
+function resolvePlatformFromModel(modelName = "") {
+  const m = modelName.toLowerCase();
+  for (const [key, p] of Object.entries(PLATFORMS)) {
+    if (p.modelKeywords.some(kw => m.includes(kw))) {
+      return key;
+    }
+  }
+  return null;
+}
+
+/**
+ * Finds an open chat tab or creates one
+ */
+async function getOrCreateChatTab(requestedModel = "") {
+  const preferredPlatformKey = resolvePlatformFromModel(requestedModel);
+
+  // If a specific platform is requested, look for its tab first
+  if (preferredPlatformKey) {
+    const p = PLATFORMS[preferredPlatformKey];
+    for (const matchPattern of p.matches) {
+      const tabs = await ext.tabs.query({ url: matchPattern });
+      if (tabs && tabs.length > 0) {
+        await ensureContentScriptInjected(tabs[0].id);
+        stats.activePlatform = p.name;
+        return tabs[0];
+      }
+    }
   }
 
-  // Create new tab pinned in background
+  // Next, look for ANY already open chat tab (Gemini, ChatGPT, or Claude)
+  for (const [key, p] of Object.entries(PLATFORMS)) {
+    for (const matchPattern of p.matches) {
+      const tabs = await ext.tabs.query({ url: matchPattern });
+      if (tabs && tabs.length > 0) {
+        await ensureContentScriptInjected(tabs[0].id);
+        stats.activePlatform = p.name;
+        return tabs[0];
+      }
+    }
+  }
+
+  // None open: create a new tab for preferred platform (or Gemini by default)
+  const targetPlatform = preferredPlatformKey ? PLATFORMS[preferredPlatformKey] : PLATFORMS.gemini;
+  stats.activePlatform = targetPlatform.name;
+
   const newTab = await ext.tabs.create({
-    url: DEFAULT_CHAT_URL,
+    url: targetPlatform.url,
     active: false,
     pinned: true
   });
 
-  currentChatTabId = newTab.id;
-
-  // Wait for tab to load
+  // Wait for tab to complete loading
   await new Promise((resolve) => {
     const listener = (tabId, changeInfo) => {
       if (tabId === newTab.id && changeInfo.status === "complete") {
         ext.tabs.onUpdated.removeListener(listener);
-        setTimeout(resolve, 2500);
+        setTimeout(resolve, 2000);
       }
     };
     ext.tabs.onUpdated.addListener(listener);
   });
 
+  await ensureContentScriptInjected(newTab.id);
   return newTab;
 }
 
@@ -144,21 +247,23 @@ async function handleBridgeRequest(req) {
     stats.lastRequestTime = new Date().toISOString();
 
     try {
-      const tab = await getOrCreateChatTab();
+      const tab = await getOrCreateChatTab(req.model);
       if (!tab || !tab.id) {
-        throw new Error("Could not find or create a Gemini chat tab.");
+        throw new Error("Could not find or create a supported AI chat tab.");
       }
 
-      // Dispatch prompt to content script
+      await ensureContentScriptInjected(tab.id);
+
       const response = await ext.tabs.sendMessage(tab.id, {
         action: "RUN_PROMPT",
         prompt: req.prompt,
-        model: req.model || "gemini-pro-web",
+        model: req.model || "pro-web",
         timeout: req.timeout || 120000
       });
 
       if (response && response.success) {
         stats.successfulRequests++;
+        stats.activePlatform = response.platform || stats.activePlatform;
         sendBridgeResponse({
           id: reqId,
           status: "success",
@@ -185,7 +290,8 @@ async function handleBridgeRequest(req) {
 
   if (action === "RESET") {
     try {
-      const tab = await getOrCreateChatTab();
+      const tab = await getOrCreateChatTab(req.model);
+      await ensureContentScriptInjected(tab.id);
       const response = await ext.tabs.sendMessage(tab.id, { action: "NEW_CHAT" });
       sendBridgeResponse({ id: reqId, status: "success", data: response });
     } catch (err) {
@@ -200,32 +306,50 @@ function sendBridgeResponse(payload) {
   }
 }
 
-// Handle messages from the extension popup
+/**
+ * Popup and Runtime Message Dispatcher
+ */
 ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const action = request.action;
 
   if (action === "GET_STATUS") {
     (async () => {
-      const tabs = await ext.tabs.query({ url: CHAT_URL_PATTERN });
-      let tabReady = false;
-      let tabTitle = "";
+      let openTabsCount = 0;
+      let activeTabInfo = null;
 
-      if (tabs.length > 0) {
-        try {
-          const tabCheck = await ext.tabs.sendMessage(tabs[0].id, { action: "PING" });
-          tabReady = tabCheck && tabCheck.inputReady;
-          tabTitle = tabs[0].title || "Gemini Chat";
-        } catch (e) {
-          tabReady = false;
+      for (const [key, p] of Object.entries(PLATFORMS)) {
+        for (const matchPattern of p.matches) {
+          const tabs = await ext.tabs.query({ url: matchPattern });
+          if (tabs && tabs.length > 0) {
+            openTabsCount += tabs.length;
+            if (!activeTabInfo) {
+              await ensureContentScriptInjected(tabs[0].id);
+              try {
+                const check = await ext.tabs.sendMessage(tabs[0].id, { action: "PING" });
+                activeTabInfo = {
+                  platform: p.name,
+                  id: tabs[0].id,
+                  title: tabs[0].title || p.name,
+                  inputReady: check?.inputReady || false
+                };
+              } catch (e) {
+                activeTabInfo = {
+                  platform: p.name,
+                  id: tabs[0].id,
+                  title: tabs[0].title || p.name,
+                  inputReady: false
+                };
+              }
+            }
+          }
         }
       }
 
       sendResponse({
         wsConnected,
-        bridgeUrl: bridgeUrls[currentUrlIndex],
-        hasChatTab: tabs.length > 0,
-        chatTabReady: tabReady,
-        chatTabTitle: tabTitle,
+        bridgeUrl: currentBridgeUrl,
+        hasChatTab: openTabsCount > 0,
+        activeTab: activeTabInfo,
         stats
       });
     })();
@@ -235,11 +359,12 @@ ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (action === "RUN_POPUP_PROMPT") {
     (async () => {
       try {
-        const tab = await getOrCreateChatTab();
+        const tab = await getOrCreateChatTab(request.model);
+        await ensureContentScriptInjected(tab.id);
         const res = await ext.tabs.sendMessage(tab.id, {
           action: "RUN_PROMPT",
           prompt: request.prompt,
-          model: request.model || "gemini-pro-web"
+          model: request.model || "pro-web"
         });
         sendResponse(res);
       } catch (err) {
@@ -250,10 +375,36 @@ ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (action === "OPEN_CHAT_TAB") {
-    getOrCreateChatTab().then(tab => {
-      ext.tabs.update(tab.id, { active: true });
-      sendResponse({ success: true, tabId: tab.id });
-    });
+    const platformKey = request.platform || "gemini";
+    const targetPlatform = PLATFORMS[platformKey] || PLATFORMS.gemini;
+    (async () => {
+      // Check if already open
+      for (const pattern of targetPlatform.matches) {
+        const existing = await ext.tabs.query({ url: pattern });
+        if (existing && existing.length > 0) {
+          await ext.tabs.update(existing[0].id, { active: true });
+          sendResponse({ success: true, tabId: existing[0].id });
+          return;
+        }
+      }
+      const newTab = await ext.tabs.create({ url: targetPlatform.url, active: true });
+      sendResponse({ success: true, tabId: newTab.id });
+    })();
+    return true;
+  }
+
+  if (action === "SET_BRIDGE_URL") {
+    (async () => {
+      const newUrl = request.url;
+      if (newUrl) {
+        await ext.storage.local.set({ customBridgeUrl: newUrl });
+      } else {
+        await ext.storage.local.remove("customBridgeUrl");
+      }
+      if (ws) ws.close();
+      connectBridge();
+      sendResponse({ success: true });
+    })();
     return true;
   }
 

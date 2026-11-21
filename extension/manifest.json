@@ -1,17 +1,24 @@
 {
   "manifest_version": 2,
-  "name": "Web2API Pro - Firefox Chat-to-API Bridge",
+  "name": "Web2API Pro - Browser Chat to API Bridge",
   "version": "2.0.0",
-  "description": "Transforms web chat interfaces into high-performance, structured pro-tier APIs with automatic code block parsing and JSON extraction.",
+  "description": "Transforms your active browser AI chat sessions (Gemini, ChatGPT, Claude) into a high-speed, local OpenAI-compatible API.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "web2api@web2api.local",
+      "strict_min_version": "109.0"
+    }
+  },
   "permissions": [
     "tabs",
     "activeTab",
     "storage",
-    "*://gemini.google.com/*",
     "http://127.0.0.1/*",
     "http://localhost/*",
-    "ws://127.0.0.1/*",
-    "ws://localhost/*"
+    "https://gemini.google.com/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*"
   ],
   "background": {
     "scripts": [
@@ -23,7 +30,10 @@
   "content_scripts": [
     {
       "matches": [
-        "*://gemini.google.com/*"
+        "https://gemini.google.com/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*"
       ],
       "js": [
         "parser.js",

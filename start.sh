@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Web2API Startup and Manager Script
-# Implements robust environment verification and launcher utilities using uv.
+# Implements robust environment verification, bridge launching, and harness utilities.
 
 set -euo pipefail
 
@@ -19,10 +19,16 @@ error() {
     echo -e "\033[1;31m[ERROR]\033[0m $1" >&2
 }
 
+# Resolve Python runner (venv if present, otherwise system python3)
+if [ -f "$VENV_DIR/bin/python3" ]; then
+    PY_BIN="$VENV_DIR/bin/python3"
+else
+    PY_BIN="python3"
+fi
+
 # Find uv if available
 UV_BIN="$(which uv 2>/dev/null || echo "/home/suzaykid/.local/bin/uv")"
 
-# setup_env: create virtualenv and install deps with uv
 setup_env() {
     if [ -x "$UV_BIN" ]; then
         log "Using uv to initialize virtual environment..."
@@ -39,51 +45,51 @@ setup_env() {
         pip install -r requirements.txt
     fi
 
-    # Install playwright browser if needed
     if [ -f "$VENV_DIR/bin/playwright" ]; then
         "$VENV_DIR/bin/playwright" install chromium || true
     fi
 }
 
-# show_help: print usage information
 show_help() {
     echo "Web2API Management CLI"
     echo "Usage:"
-    echo "  $0 bridge         - Start the Web2API Firefox Extension Bridge Server (OpenAI REST + WebSocket)"
+    echo "  $0 bridge         - Start the Web2API Extension Bridge Server (REST API + WebSocket)"
+    echo "  $0 harness <cmd>  - Run test, mock, or agent connection harness (test, mock, chat, acp)"
+    echo "  $0 mock           - Run standalone mock browser extension on WebSocket"
+    echo "  $0 chat           - Interactive terminal chat with real-time SSE streaming"
     echo "  $0 serve          - Start the Playwright Headless FastAPI server"
     echo "  $0 setup          - Initialize virtualenv with uv and install dependencies"
-    echo "  $0 auth           - Launch headful browser to log in manually (Playwright mode)"
     echo "  $0 help           - Display this help message"
 }
 
-ensure_setup() {
-    if [ ! -d "$VENV_DIR" ]; then
-        log "Environment not initialized. Running setup with uv..."
-        setup_env
-    fi
-}
-
 COMMAND="${1:-help}"
+shift || true
 
 case "$COMMAND" in
     setup)
         setup_env
-        log "Setup complete! Run '$0 bridge' for Firefox extension mode or '$0 auth' for Playwright mode."
+        log "Setup complete! Run '$0 bridge' to start the Firefox / Zen bridge server."
         ;;
     bridge)
-        ensure_setup
-        log "Starting Web2API Firefox Extension Bridge Server on http://127.0.0.1:8000..."
-        exec "$VENV_DIR/bin/python3" bridge_server.py
+        log "Starting Web2API Firefox / Zen Bridge Server on http://127.0.0.1:8000..."
+        exec "$PY_BIN" bridge_server.py
+        ;;
+    harness)
+        exec "$PY_BIN" harness.py "$@"
+        ;;
+    mock)
+        exec "$PY_BIN" harness.py mock "$@"
+        ;;
+    chat)
+        exec "$PY_BIN" harness.py chat "$@"
         ;;
     serve)
-        ensure_setup
         log "Starting Playwright FastAPI Server on http://127.0.0.1:8000..."
-        exec "$VENV_DIR/bin/python3" server.py
+        exec "$PY_BIN" server.py
         ;;
     auth)
-        ensure_setup
         log "Starting authentication window..."
-        exec "$VENV_DIR/bin/python3" setup_session.py
+        exec "$PY_BIN" setup_session.py
         ;;
     help|*)
         show_help

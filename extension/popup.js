@@ -1,5 +1,5 @@
 /**
- * Web2API Pro - Extension Popup Script
+ * Web2API Pro - Extension Popup Script for Firefox / Zen
  */
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
@@ -7,21 +7,27 @@ const ext = typeof browser !== "undefined" ? browser : chrome;
 // DOM Elements
 const bridgeBadge = document.getElementById("bridgeBadge");
 const tabBadge = document.getElementById("tabBadge");
-const openTabBtn = document.getElementById("openTabBtn");
+const openGeminiBtn = document.getElementById("openGeminiBtn");
+const openChatgptBtn = document.getElementById("openChatgptBtn");
+const openClaudeBtn = document.getElementById("openClaudeBtn");
 const resetChatBtn = document.getElementById("resetChatBtn");
-const copyCurlBtn = document.getElementById("copyCurlBtn");
-const promptInput = document.getElementById("promptInput");
+const bridgeUrlInput = document.getElementById("bridgeUrlInput");
+const reconnectBridgeBtn = document.getElementById("reconnectBridgeBtn");
+const modelSelect = document.getElementById("modelSelect");
 const formatSelect = document.getElementById("formatSelect");
+const promptInput = document.getElementById("promptInput");
 const sendBtn = document.getElementById("sendBtn");
 const btnIcon = document.getElementById("btnIcon");
 const statCount = document.getElementById("statCount");
+const copyCurlBtn = document.getElementById("copyCurlBtn");
 const latencyBadge = document.getElementById("latencyBadge");
 const copyOutputBtn = document.getElementById("copyOutputBtn");
 const outputView = document.getElementById("outputView");
 
 let lastResult = null;
+let currentBridgeUrl = "ws://127.0.0.1:8000/ws";
 
-// Initialize status
+// Initialize and refresh status
 async function refreshStatus() {
   try {
     const res = await ext.runtime.sendMessage({ action: "GET_STATUS" });
@@ -36,15 +42,26 @@ async function refreshStatus() {
       bridgeBadge.className = "badge badge-disconnected";
     }
 
-    // Chat tab status
-    if (res.chatTabReady) {
-      tabBadge.textContent = "Tab: Ready";
-      tabBadge.className = "badge badge-connected";
+    if (res.bridgeUrl && !bridgeUrlInput.value) {
+      bridgeUrlInput.value = res.bridgeUrl;
+      currentBridgeUrl = res.bridgeUrl;
+    }
+
+    // Active Chat Tab status
+    if (res.activeTab) {
+      const pName = res.activeTab.platform;
+      if (res.activeTab.inputReady) {
+        tabBadge.textContent = `${pName}: Ready`;
+        tabBadge.className = "badge badge-connected";
+      } else {
+        tabBadge.textContent = `${pName}: Loading`;
+        tabBadge.className = "badge badge-warning";
+      }
     } else if (res.hasChatTab) {
       tabBadge.textContent = "Tab: Not Ready";
       tabBadge.className = "badge badge-warning";
     } else {
-      tabBadge.textContent = "Tab: Not Found";
+      tabBadge.textContent = "Tab: Offline";
       tabBadge.className = "badge badge-disconnected";
     }
 
@@ -74,41 +91,71 @@ function renderOutput() {
         .join("\n\n// ----------------------------------------\n\n");
     }
   } else if (mode === "markdown") {
-    outputView.textContent = lastResult.choices?.[0]?.message?.content || JSON.stringify(lastResult);
+    outputView.textContent = lastResult.choices?.[0]?.message?.content || JSON.stringify(lastResult, null, 2);
   }
 }
 
 // Event Listeners
 formatSelect.addEventListener("change", renderOutput);
 
-openTabBtn.addEventListener("click", () => {
-  ext.runtime.sendMessage({ action: "OPEN_CHAT_TAB" });
+openGeminiBtn.addEventListener("click", () => {
+  ext.runtime.sendMessage({ action: "OPEN_CHAT_TAB", platform: "gemini" });
   setTimeout(refreshStatus, 1500);
+});
+
+openChatgptBtn.addEventListener("click", () => {
+  ext.runtime.sendMessage({ action: "OPEN_CHAT_TAB", platform: "chatgpt" });
+  setTimeout(refreshStatus, 1500);
+});
+
+openClaudeBtn.addEventListener("click", () => {
+  ext.runtime.sendMessage({ action: "OPEN_CHAT_TAB", platform: "claude" });
+  setTimeout(refreshStatus, 1500);
+});
+
+reconnectBridgeBtn.addEventListener("click", async () => {
+  const url = bridgeUrlInput.value.trim();
+  if (url) {
+    reconnectBridgeBtn.disabled = true;
+    reconnectBridgeBtn.textContent = "...";
+    await ext.runtime.sendMessage({ action: "SET_BRIDGE_URL", url });
+    setTimeout(() => {
+      reconnectBridgeBtn.disabled = false;
+      reconnectBridgeBtn.textContent = "Connect";
+      refreshStatus();
+    }, 1000);
+  }
 });
 
 resetChatBtn.addEventListener("click", async () => {
   resetChatBtn.disabled = true;
+  const orig = resetChatBtn.innerHTML;
   resetChatBtn.textContent = "Resetting...";
   try {
-    const tabs = await ext.tabs.query({ url: "*://gemini.google.com/*" });
-    if (tabs.length > 0) {
-      await ext.tabs.sendMessage(tabs[0].id, { action: "NEW_CHAT" });
-      outputView.textContent = "Conversation thread successfully reset.";
-    } else {
-      outputView.textContent = "No active Gemini tab found to reset.";
-    }
+    const res = await ext.runtime.sendMessage({
+      action: "RUN_POPUP_PROMPT",
+      prompt: "RESET_CHAT" // Background routes RESET action
+    });
+    outputView.textContent = "New conversation thread initiated.";
   } catch (err) {
     outputView.textContent = "Reset error: " + err.message;
   } finally {
     resetChatBtn.disabled = false;
-    resetChatBtn.innerHTML = "<span>🔄</span> New Chat Thread";
+    resetChatBtn.innerHTML = orig;
+    refreshStatus();
   }
 });
 
 copyCurlBtn.addEventListener("click", () => {
+  const selectedModel = modelSelect.value === "auto" ? "gemini-pro" : modelSelect.value;
   const curlCmd = `curl -X POST http://127.0.0.1:8000/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -d '{"model": "gemini-pro", "messages": [{"role": "user", "content": "Write a fast Fibonacci function in Rust"}]}'`;
+  -d '{
+    "model": "${selectedModel}",
+    "messages": [
+      {"role": "user", "content": "Write a high-performance Fibonacci function in Rust."}
+    ]
+  }'`;
 
   navigator.clipboard.writeText(curlCmd);
   const orig = copyCurlBtn.innerHTML;
@@ -130,14 +177,16 @@ sendBtn.addEventListener("click", async () => {
 
   sendBtn.disabled = true;
   btnIcon.textContent = "⏳";
-  outputView.textContent = "Typing into Gemini chat and awaiting response...";
+  outputView.textContent = "Dispatching prompt to active browser chat tab and awaiting response...";
   const startTime = Date.now();
+
+  const selectedModel = modelSelect.value === "auto" ? "pro-web" : modelSelect.value;
 
   try {
     const res = await ext.runtime.sendMessage({
       action: "RUN_POPUP_PROMPT",
       prompt: prompt,
-      model: "gemini-pro-web"
+      model: selectedModel
     });
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -147,7 +196,7 @@ sendBtn.addEventListener("click", async () => {
       lastResult = res.data;
       renderOutput();
     } else {
-      outputView.textContent = "Error: " + (res?.error || "Execution failed. Ensure Gemini tab is open and logged in.");
+      outputView.textContent = "Error: " + (res?.error || "Execution failed. Ensure an AI chat tab (Gemini, ChatGPT, or Claude) is open and logged in.");
     }
   } catch (err) {
     outputView.textContent = "Request Exception: " + err.message;
@@ -158,6 +207,6 @@ sendBtn.addEventListener("click", async () => {
   }
 });
 
-// Refresh immediately and on focus
+// Refresh immediately and periodically
 refreshStatus();
-setInterval(refreshStatus, 3000);
+setInterval(refreshStatus, 2500);

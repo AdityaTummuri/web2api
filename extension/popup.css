@@ -1,4 +1,4 @@
-/* popup.css - Web2API Pro Extension */
+/* popup.css - Web2API Pro Extension for Firefox / Zen */
 
 :root {
   --bg-primary: #0f172a;
@@ -25,8 +25,8 @@
 }
 
 body {
-  width: 480px;
-  min-height: 560px;
+  width: 500px;
+  min-height: 580px;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -38,7 +38,7 @@ body {
 .container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* Header */
@@ -117,17 +117,17 @@ body {
 /* Toolbar */
 .toolbar {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   font-size: 12px;
   font-weight: 600;
-  padding: 7px 12px;
+  padding: 6px 10px;
   border-radius: var(--radius);
   border: none;
   cursor: pointer;
@@ -135,7 +135,7 @@ body {
 }
 
 .btn-sm {
-  padding: 5px 10px;
+  padding: 5px 9px;
   font-size: 11px;
 }
 
@@ -180,6 +180,33 @@ body {
   text-decoration: underline;
 }
 
+/* Bridge URL config bar */
+.bridge-config-row {
+  display: flex;
+}
+
+.input-with-button {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+}
+
+.input-with-button input {
+  flex: 1;
+  background-color: var(--bg-secondary);
+  color: #38bdf8;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+}
+
+.input-with-button input:focus {
+  border-color: var(--border-focus);
+}
+
 /* Cards */
 .card {
   background-color: var(--bg-secondary);
@@ -198,20 +225,25 @@ body {
 }
 
 .card-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.format-select select {
+.select-group {
+  display: flex;
+  gap: 6px;
+}
+
+.dropdown-mini {
   background-color: var(--bg-tertiary);
   color: var(--text-primary);
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 11px;
-  padding: 2px 6px;
+  padding: 3px 6px;
   outline: none;
 }
 
@@ -237,6 +269,11 @@ textarea:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.btn-group-right {
+  display: flex;
+  gap: 6px;
 }
 
 .stats-mini {
@@ -266,7 +303,7 @@ pre {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
-  max-height: 200px;
+  max-height: 190px;
   overflow-y: auto;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -281,7 +318,7 @@ pre {
   font-size: 11px;
   color: var(--text-secondary);
   text-align: center;
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .footer code {

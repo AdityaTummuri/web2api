@@ -10,14 +10,14 @@ Commands:
   acp   - Launch an autonomous Agent Client Protocol (ACP) agent powered by Web2API
 """
 
+import argparse
+import asyncio
+import json
 import os
 import sys
 import time
-import json
 import uuid
-import asyncio
-import argparse
-from typing import Dict, Any, Optional
+from typing import Optional
 
 import httpx
 import websockets
@@ -26,6 +26,8 @@ DEFAULT_API_BASE = os.getenv("WEB2API_BASE", "http://127.0.0.1:8000")
 DEFAULT_WS_URL = os.getenv("WEB2API_WS", "ws://127.0.0.1:8000/ws")
 
 # Terminal color formatting
+
+
 class Colors:
     HEADER = "\033[95m"
     BLUE = "\033[94m"
@@ -37,14 +39,18 @@ class Colors:
     DIM = "\033[2m"
     RESET = "\033[0m"
 
+
 def log_info(msg: str):
     print(f"{Colors.BLUE}[INFO]{Colors.RESET} {msg}")
+
 
 def log_success(msg: str):
     print(f"{Colors.GREEN}[PASS]{Colors.RESET} {msg}")
 
+
 def log_warn(msg: str):
     print(f"{Colors.YELLOW}[WARN]{Colors.RESET} {msg}")
+
 
 def log_error(msg: str):
     print(f"{Colors.RED}[FAIL]{Colors.RESET} {msg}")
@@ -518,6 +524,7 @@ Examples:
     elif args.command == "acp":
         agent = ACPAgentHarness(api_base=args.api_base, model=args.model)
         asyncio.run(agent.start())
+
 
 if __name__ == "__main__":
     main()

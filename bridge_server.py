@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
-from tool_parser import format_conversation_with_tools, parse_tool_calls, validate_tool_arguments
+from tool_parser import format_conversation_with_tools, parse_tool_calls
 
 # Configuration
 HOST = os.getenv("HOST", "0.0.0.0")

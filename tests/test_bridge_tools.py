@@ -2,9 +2,8 @@
 Integration tests for Tool Calling & Emulation on the Web2API Bridge Server.
 """
 
-import unittest
 import json
-import asyncio
+import unittest
 from fastapi.testclient import TestClient
 
 from bridge_server import app, hub
@@ -138,7 +137,7 @@ class TestBridgeServerToolCalling(unittest.TestCase):
         self.assertIn("text/event-stream", resp.headers.get("content-type", ""))
 
         lines = resp.text.split("\n")
-        data_lines = [l[6:].strip() for l in lines if l.startswith("data: ") and l[6:].strip() != "[DONE]"]
+        data_lines = [line[6:].strip() for line in lines if line.startswith("data: ") and line[6:].strip() != "[DONE]"]
 
         tool_calls_seen = False
         finish_reason_seen = False

@@ -3,14 +3,14 @@ Asynchronous Web2API Client.
 """
 
 import json
-from typing import AsyncGenerator, List, Optional, Union, Dict, Any
+from typing import AsyncGenerator, Optional, Dict
 
 try:
     import httpx
 except ImportError:
     httpx = None
 
-from .models import ChatMessage, ChatResponse, HealthStatus
+from .models import HealthStatus
 from .exceptions import (
     Web2ApiException,
     Web2ApiAuthError,

@@ -151,7 +151,7 @@ def format_conversation_with_tools(
 
         if role == "tool":
             # Tool result message
-            header = f"[Tool Result"
+            header = "[Tool Result"
             if name:
                 header += f" for `{name}`"
             if tool_call_id:
@@ -166,7 +166,7 @@ def format_conversation_with_tools(
                 call_snippets.append(
                     f"```tool_call\n{json.dumps({'name': fn.get('name'), 'arguments': fn.get('arguments')})}\n```"
                 )
-            body = f"[Assistant]:\n" + (f"{content}\n" if content else "") + "\n".join(call_snippets)
+            body = "[Assistant]:\n" + (f"{content}\n" if content else "") + "\n".join(call_snippets)
             formatted_parts.append(body)
         else:
             formatted_parts.append(f"[{role_cap}]:\n{content}")
@@ -198,7 +198,6 @@ def parse_tool_calls(
                 declared_names.add(name)
 
     tool_calls: List[Dict[str, Any]] = []
-    text_without_tools = raw_text
 
     # Candidate 1: Fenced blocks ```tool_call ... ``` or ```json ... ```
     matches = list(FENCE_BLOCK_REGEX.finditer(raw_text))

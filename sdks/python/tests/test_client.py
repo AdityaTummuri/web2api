@@ -1,9 +1,6 @@
-import unittest
 import json
+import unittest
 import httpx
-
-from web2api import Web2ApiClient
-from web2api.exceptions import Web2ApiAuthError, Web2ApiExtensionUnavailableError
 
 
 class TestWeb2ApiPythonClient(unittest.TestCase):
@@ -20,10 +17,6 @@ class TestWeb2ApiPythonClient(unittest.TestCase):
 
         transport = httpx.MockTransport(handler)
         with httpx.Client(transport=transport) as mock_http:
-            client = Web2ApiClient(base_url="http://test-server:8000", api_key="sk-test")
-            # Inject mock client
-            original_httpx = client._headers
-
             # Test using direct mock
             resp = mock_http.get("http://test-server:8000/health")
             data = resp.json()
@@ -56,7 +49,7 @@ class TestWeb2ApiPythonClient(unittest.TestCase):
 
             # Verify stream endpoint mock
             stream_res = http.post("http://test/v1/chat/completions", json={"prompt": "hi"})
-            lines = [l for l in stream_res.text.split("\n") if l.startswith("data: ")]
+            lines = [line for line in stream_res.text.split("\n") if line.startswith("data: ")]
             self.assertEqual(len(lines), 4)
 
     def test_create_chat_completion_with_tools(self):
@@ -86,7 +79,6 @@ class TestWeb2ApiPythonClient(unittest.TestCase):
 
         transport = httpx.MockTransport(handler)
         with httpx.Client(transport=transport) as mock_http:
-            client = Web2ApiClient(base_url="http://test-server:8000")
             tools = [{"type": "function", "function": {"name": "search", "parameters": {}}}]
             res = mock_http.post(
                 "http://test-server:8000/v1/chat/completions",

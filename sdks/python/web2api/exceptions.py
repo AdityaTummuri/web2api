@@ -2,6 +2,7 @@
 Exceptions for Web2API Python SDK.
 """
 
+
 class Web2ApiException(Exception):
     """Base exception for Web2API SDK errors."""
     def __init__(self, message: str, status_code: int = None, details: dict = None):

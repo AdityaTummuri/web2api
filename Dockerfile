@@ -14,11 +14,12 @@ COPY requirements.txt pyproject.toml ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY bridge_server.py server.py session_manager.py ./
+COPY bridge_server.py tool_parser.py server.py session_manager.py harness.py api.txt* ./
 COPY spec/ spec/
 COPY docs/ docs/
 COPY templates/ templates/
 COPY assets/ assets/
+COPY sdks/ sdks/
 
 # Environment defaults
 ENV HOST=0.0.0.0 \

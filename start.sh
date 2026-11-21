@@ -67,8 +67,7 @@ shift || true
 
 case "$COMMAND" in
     setup)
-        setup_env
-        log "Setup complete! Run '$0 bridge' to start the Firefox / Zen bridge server."
+        exec "$SCRIPT_DIR/install.sh"
         ;;
     bridge)
         log "Starting Web2API Firefox / Zen Bridge Server on http://127.0.0.1:8000..."

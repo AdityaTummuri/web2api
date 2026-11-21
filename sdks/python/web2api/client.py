@@ -239,9 +239,11 @@ class Web2ApiClient:
         messages: List[Union[ChatMessage, Dict[str, str]]],
         model: str = "gemini-pro",
         temperature: float = 0.7,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Any = "auto",
     ) -> Dict[str, Any]:
         """
-        Standard OpenAI-compatible Chat Completion endpoint.
+        Standard OpenAI-compatible Chat Completion endpoint with Tool Calling.
         """
         formatted = []
         for m in messages:
@@ -256,6 +258,9 @@ class Web2ApiClient:
             "temperature": temperature,
             "stream": False,
         }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
 
         if httpx:
             try:

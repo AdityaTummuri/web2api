@@ -112,6 +112,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) and [`RELEASING.md`](RELEASING.md).
 | [Install on Firefox](docs/install-firefox.md) | Firefox and Firefox forks |
 | [API keys](docs/api-keys.md) | Creating, scoping, rotating and revoking `sk-w2a-…` keys |
 | [API reference](docs/api-reference.md) | Endpoints, parameters, streaming, errors |
+| [Tool Calling & Functions](docs/tool_calling.md) | Standard OpenAI tool calling with resilient JSON/tag parser |
 | [Using it with other tools](docs/compatibility.md) | Cursor, Continue, Open WebUI, LangChain, Aider, … |
 | [MCP server (v2.0.0)](docs/mcp.md) | Use Web2API from Claude Code, Cursor, VS Code, Codex, … |
 | [Deep Research and search (v2.0.0)](docs/research-and-search.md) | Cited answers and long research reports |

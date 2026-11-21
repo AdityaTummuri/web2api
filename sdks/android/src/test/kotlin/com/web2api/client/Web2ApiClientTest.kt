@@ -2,8 +2,7 @@ package com.web2api.client
 
 import com.web2api.client.exceptions.Web2ApiAuthException
 import com.web2api.client.exceptions.Web2ApiExtensionUnavailableException
-import com.web2api.client.models.ChatMessage
-import com.web2api.client.models.ChatCompletionRequest
+import com.web2api.client.models.*
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
@@ -72,6 +71,54 @@ class Web2ApiClientTest {
         val recorded = server.takeRequest()
         assertEquals("/api/chat", recorded.path)
         assertEquals("Bearer test-key", recorded.getHeader("Authorization"))
+    }
+
+    @Test
+    fun testChatCompletionWithTools() = runBlocking {
+        val json = """
+            {
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "created": 1700000000,
+                "model": "gemini-pro",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": null,
+                            "tool_calls": [
+                                {
+                                    "id": "call_weather123",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "get_weather",
+                                        "arguments": "{\"location\":\"Tokyo\"}"
+                                    }
+                                }
+                            ]
+                        },
+                        "finish_reason": "tool_calls"
+                    }
+                ],
+                "latency_seconds": 0.5
+            }
+        """.trimIndent()
+
+        server.enqueue(MockResponse().setResponseCode(200).setBody(json))
+
+        val request = ChatCompletionRequest(
+            messages = listOf(ChatMessage.user("Weather in Tokyo?")),
+            tools = listOf(
+                Tool(function = FunctionDefinition("get_weather", "Fetch weather"))
+            )
+        )
+
+        val response = client.createChatCompletion(request)
+        assertTrue(response.isToolCall)
+        assertEquals(1, response.toolCalls.size)
+        assertEquals("get_weather", response.toolCalls[0].function.name)
+        assertEquals("{\"location\":\"Tokyo\"}", response.toolCalls[0].function.arguments)
     }
 
     @Test

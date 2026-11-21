@@ -12,7 +12,7 @@ import re
 import time
 import uuid
 from datetime import datetime
-from typing import AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Security, WebSocket, WebSocketDisconnect, status
@@ -20,6 +20,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
+
+from tool_parser import format_conversation_with_tools, parse_tool_calls, validate_tool_arguments
 
 # Configuration
 HOST = os.getenv("HOST", "0.0.0.0")
@@ -250,8 +252,11 @@ async def websocket_bridge(websocket: WebSocket):
 
 # Pydantic Schemas
 class MessageItem(BaseModel):
-    role: str = Field(..., description="Role of the author ('system', 'user', or 'assistant')")
-    content: str = Field(..., description="Message text content")
+    role: str = Field(..., description="Role of the author ('system', 'user', 'assistant', or 'tool')")
+    content: Optional[str] = Field("", description="Message text content")
+    name: Optional[str] = Field(None, description="Optional name for tool results or participants")
+    tool_call_id: Optional[str] = Field(None, description="Tool call ID for tool results")
+    tool_calls: Optional[List[Dict[str, Any]]] = Field(None, description="Tool calls initiated by assistant")
 
 
 class OpenAIChatRequest(BaseModel):
@@ -260,6 +265,8 @@ class OpenAIChatRequest(BaseModel):
     temperature: Optional[float] = Field(0.7, description="Sampling temperature (emulated)")
     stream: Optional[bool] = Field(False, description="Whether to stream back partial chunks via Server-Sent Events")
     max_tokens: Optional[int] = Field(None, description="Maximum number of tokens to generate")
+    tools: Optional[List[Dict[str, Any]]] = Field(None, description="List of tools available to the model")
+    tool_choice: Optional[Union[str, Dict[str, Any]]] = Field("auto", description="Controls tool selection ('auto', 'none', 'required', or specific tool)")
 
 
 class Web2ApiRequest(BaseModel):
@@ -369,10 +376,134 @@ async def generate_sse_stream(
     yield "data: [DONE]\n\n"
 
 
+async def generate_sse_tool_stream(
+    chat_id: str,
+    model_name: str,
+    clean_content: Optional[str],
+    tool_calls: List[Dict[str, Any]],
+    created_ts: int,
+) -> AsyncGenerator[str, None]:
+    """
+    Yields standard Server-Sent Events (SSE) chunks for OpenAI-compatible streaming tool calls.
+    """
+    # 1. Role announcement chunk
+    role_chunk = {
+        "id": chat_id,
+        "object": "chat.completion.chunk",
+        "created": created_ts,
+        "model": model_name,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {"role": "assistant"},
+                "finish_reason": None,
+            }
+        ],
+    }
+    yield f"data: {json.dumps(role_chunk)}\n\n"
+
+    # 2. Content delta chunks (if thought or explanation exists)
+    if clean_content:
+        tokens = re.findall(r"\S+|\s+", clean_content)
+        for token in tokens:
+            content_chunk = {
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": model_name,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"content": token},
+                        "finish_reason": None,
+                    }
+                ],
+            }
+            yield f"data: {json.dumps(content_chunk)}\n\n"
+            await asyncio.sleep(0.002)
+
+    # 3. Tool call delta chunks
+    for tc_index, tc in enumerate(tool_calls):
+        tc_id = tc["id"]
+        fn_name = tc["function"]["name"]
+        fn_args = tc["function"]["arguments"]
+
+        # Initial tool call descriptor
+        init_chunk = {
+            "id": chat_id,
+            "object": "chat.completion.chunk",
+            "created": created_ts,
+            "model": model_name,
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {
+                        "tool_calls": [
+                            {
+                                "index": tc_index,
+                                "id": tc_id,
+                                "type": "function",
+                                "function": {
+                                    "name": fn_name,
+                                    "arguments": "",
+                                },
+                            }
+                        ]
+                    },
+                    "finish_reason": None,
+                }
+            ],
+        }
+        yield f"data: {json.dumps(init_chunk)}\n\n"
+
+        # Stream argument tokens
+        arg_tokens = re.findall(r"\S+|\s+", fn_args)
+        for tok in arg_tokens:
+            arg_chunk = {
+                "id": chat_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": model_name,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": tc_index,
+                                    "function": {"arguments": tok},
+                                }
+                            ]
+                        },
+                        "finish_reason": None,
+                    }
+                ],
+            }
+            yield f"data: {json.dumps(arg_chunk)}\n\n"
+            await asyncio.sleep(0.002)
+
+    # 4. Final stop chunk with finish_reason: "tool_calls"
+    stop_chunk = {
+        "id": chat_id,
+        "object": "chat.completion.chunk",
+        "created": created_ts,
+        "model": model_name,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {},
+                "finish_reason": "tool_calls",
+            }
+        ],
+    }
+    yield f"data: {json.dumps(stop_chunk)}\n\n"
+    yield "data: [DONE]\n\n"
+
+
 @app.post("/v1/chat/completions")
 async def openai_chat_completions(req: OpenAIChatRequest, raw_request: Request):
     """
-    Standard OpenAI-compatible Chat Completions API.
+    Standard OpenAI-compatible Chat Completions API with full Tool Calling emulation.
     Supports both non-streaming JSON and streaming Server-Sent Events (SSE).
     Works seamlessly with LangChain, LlamaIndex, Cursor, Continue, AutoGen, and curl!
     """
@@ -381,13 +512,17 @@ async def openai_chat_completions(req: OpenAIChatRequest, raw_request: Request):
     if not req.messages:
         raise HTTPException(status_code=400, detail="Messages array cannot be empty.")
 
-    if len(req.messages) == 1:
-        prompt_text = req.messages[0].content
+    # Format prompt, handling tool schemas and tool result messages
+    if req.tools:
+        prompt_text = format_conversation_with_tools(req.messages, req.tools, req.tool_choice)
+    elif len(req.messages) == 1:
+        prompt_text = req.messages[0].content or ""
     else:
         formatted = []
         for m in req.messages:
             role = m.role.capitalize()
-            formatted.append(f"[{role}]: {m.content}")
+            content_val = m.content or ""
+            formatted.append(f"[{role}]: {content_val}")
         prompt_text = "\n\n".join(formatted) + "\n\n[Assistant]:"
 
     start_time = time.time()
@@ -404,10 +539,21 @@ async def openai_chat_completions(req: OpenAIChatRequest, raw_request: Request):
     else:
         content_text = str(response_data)
 
-    # Streaming Response (Server-Sent Events)
+    # Tool calling detection and parsing
+    tool_calls = []
+    clean_content = content_text
+    if req.tools and req.tool_choice != "none":
+        clean_content, tool_calls = parse_tool_calls(content_text, req.tools)
+
+    # 1. Streaming Response (Server-Sent Events)
     if req.stream:
+        if tool_calls:
+            stream_gen = generate_sse_tool_stream(chat_id, req.model, clean_content, tool_calls, created_ts)
+        else:
+            stream_gen = generate_sse_stream(chat_id, req.model, content_text, created_ts)
+
         return StreamingResponse(
-            generate_sse_stream(chat_id, req.model, content_text, created_ts),
+            stream_gen,
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -416,11 +562,39 @@ async def openai_chat_completions(req: OpenAIChatRequest, raw_request: Request):
             },
         )
 
-    # Non-Streaming JSON Response
+    # 2. Non-Streaming Response with Tool Calls
+    if tool_calls:
+        return {
+            "id": chat_id,
+            "object": "chat.completion",
+            "created": created_ts,
+            "model": req.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": clean_content,
+                        "tool_calls": tool_calls,
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": len(prompt_text) // 4,
+                "completion_tokens": len(content_text) // 4,
+                "total_tokens": (len(prompt_text) + len(content_text)) // 4,
+            },
+            "extracted": response_data.get("extracted", {}),
+            "latency_seconds": round(elapsed, 2),
+        }
+
+    # 3. Non-Streaming JSON Response (Already fully formatted)
     if "choices" in response_data and "usage" in response_data:
         response_data["latency_seconds"] = round(elapsed, 2)
         return response_data
 
+    # 4. Standard Non-Streaming JSON Response
     return {
         "id": chat_id,
         "object": "chat.completion",

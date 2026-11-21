@@ -59,6 +59,44 @@ class TestWeb2ApiPythonClient(unittest.TestCase):
             lines = [l for l in stream_res.text.split("\n") if l.startswith("data: ")]
             self.assertEqual(len(lines), 4)
 
+    def test_create_chat_completion_with_tools(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            data = json.loads(request.read())
+            self.assertIn("tools", data)
+            self.assertEqual(data["tools"][0]["function"]["name"], "search")
+            return httpx.Response(200, json={
+                "id": "chatcmpl-tools",
+                "object": "chat.completion",
+                "created": 1700000000,
+                "model": "gemini-pro",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "search", "arguments": '{"query":"Python"}'}
+                        }]
+                    },
+                    "finish_reason": "tool_calls"
+                }]
+            })
+
+        transport = httpx.MockTransport(handler)
+        with httpx.Client(transport=transport) as mock_http:
+            client = Web2ApiClient(base_url="http://test-server:8000")
+            tools = [{"type": "function", "function": {"name": "search", "parameters": {}}}]
+            res = mock_http.post(
+                "http://test-server:8000/v1/chat/completions",
+                json={"messages": [{"role": "user", "content": "Search Python"}], "tools": tools}
+            ).json()
+
+            choice = res["choices"][0]
+            self.assertEqual(choice["finish_reason"], "tool_calls")
+            self.assertEqual(choice["message"]["tool_calls"][0]["function"]["name"], "search")
+
 
 if __name__ == "__main__":
     unittest.main()

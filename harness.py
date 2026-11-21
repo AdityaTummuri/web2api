@@ -126,14 +126,21 @@ class MockExtensionHarness:
                     break
 
     def _synthesize_response(self, prompt: str, model: str) -> dict:
-        content = (
-            f"Hello from Web2API Mock Harness [{model}]!\n\n"
-            f"Received prompt: \"{prompt}\"\n\n"
-            "```python\n"
-            "def answer():\n"
-            "    return 'Web2API Harness Connection Verified!'\n"
-            "```\n"
-        )
+        if "AVAILABLE TOOLS" in prompt:
+            content = (
+                "```tool_call\n"
+                '{"name": "test_search", "arguments": {"query": "Web2API Architecture"}}\n'
+                "```"
+            )
+        else:
+            content = (
+                f"Hello from Web2API Mock Harness [{model}]!\n\n"
+                f"Received prompt: \"{prompt}\"\n\n"
+                "```python\n"
+                "def answer():\n"
+                "    return 'Web2API Harness Connection Verified!'\n"
+                "```\n"
+            )
         return {
             "id": f"chatcmpl-mock-{uuid.uuid4().hex[:8]}",
             "object": "chat.completion",
@@ -263,6 +270,30 @@ class TestHarness:
                 assert res.status_code == 200
                 assert res.json().get("status") == "success"
                 log_success("POST /api/reset: Thread reset successful")
+                passed += 1
+
+                # 8. Tool Calling Conformance
+                total += 1
+                tool_payload = {
+                    "model": "gemini-pro",
+                    "messages": [{"role": "user", "content": "Search for Web2API"}],
+                    "tools": [{
+                        "type": "function",
+                        "function": {
+                            "name": "test_search",
+                            "description": "Search test tool",
+                            "parameters": {"type": "object", "properties": {"query": {"type": "string"}}}
+                        }
+                    }],
+                    "stream": False
+                }
+                res = await client.post("/v1/chat/completions", json=tool_payload)
+                assert res.status_code == 200
+                tool_data = res.json()
+                choice = tool_data["choices"][0]
+                assert choice["finish_reason"] == "tool_calls"
+                assert choice["message"]["tool_calls"][0]["function"]["name"] == "test_search"
+                log_success("POST /v1/chat/completions (Tool Calling): tool_calls parsed correctly")
                 passed += 1
 
             except Exception as e:

@@ -1,18 +1,21 @@
 {
   "name": "web2api-firefox-extension",
   "version": "2.0.0",
-  "description": "Firefox extension that converts Gemini web chat into a pro-level OpenAI-compatible API with code block and JSON extraction.",
+  "description": "Firefox and Zen extension that bridges live Gemini, ChatGPT, and Claude web chat into an OpenAI-compatible local API.",
   "type": "commonjs",
   "scripts": {
-    "test": "node --test test_parser.js"
+    "test": "node --test test_parser.js",
+    "build": "node build.js",
+    "package": "node build.js"
   },
   "keywords": [
     "firefox-extension",
+    "zen-browser",
     "web2api",
     "gemini",
-    "openai-api",
-    "acp",
-    "code-parser"
+    "chatgpt",
+    "claude",
+    "openai-api"
   ],
   "author": "",
   "license": "MIT"

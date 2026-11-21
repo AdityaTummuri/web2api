@@ -14,7 +14,7 @@
         <div class="logo-icon">⚡</div>
         <div>
           <h1 class="title">Web2API Pro</h1>
-          <span class="subtitle">Browser Chat to High-Speed API</span>
+          <span class="subtitle">Firefox / Zen AI Chat Bridge</span>
         </div>
       </div>
       <div class="badge-group">
@@ -25,38 +25,60 @@
 
     <!-- Navigation / Quick Actions -->
     <div class="toolbar">
-      <button id="openTabBtn" class="btn btn-secondary btn-sm">
-        <span>🌐</span> Open Gemini Tab
+      <button id="openGeminiBtn" class="btn btn-secondary btn-sm" title="Open Google Gemini">
+        <span>🌐</span> Gemini
       </button>
-      <button id="resetChatBtn" class="btn btn-secondary btn-sm">
-        <span>🔄</span> New Chat Thread
+      <button id="openChatgptBtn" class="btn btn-secondary btn-sm" title="Open ChatGPT">
+        <span>💬</span> ChatGPT
       </button>
-      <button id="copyCurlBtn" class="btn btn-secondary btn-sm">
-        <span>📋</span> Copy cURL
+      <button id="openClaudeBtn" class="btn btn-secondary btn-sm" title="Open Claude">
+        <span>🧠</span> Claude
       </button>
+      <button id="resetChatBtn" class="btn btn-secondary btn-sm" title="Start New Conversation">
+        <span>🔄</span> New Chat
+      </button>
+    </div>
+
+    <!-- Bridge Connection Settings Bar -->
+    <div class="bridge-config-row">
+      <div class="input-with-button">
+        <input type="text" id="bridgeUrlInput" placeholder="ws://127.0.0.1:8000/ws" spellcheck="false" />
+        <button id="reconnectBridgeBtn" class="btn btn-secondary btn-sm">Connect</button>
+      </div>
     </div>
 
     <!-- Playground Prompt Box -->
     <div class="card">
       <div class="card-header">
         <label for="promptInput" class="card-title">Live Prompt Console</label>
-        <div class="format-select">
-          <select id="formatSelect">
+        <div class="select-group">
+          <select id="modelSelect" class="dropdown-mini" title="Target Model / Provider">
+            <option value="auto">Auto-Detect Active Tab</option>
+            <option value="gemini-pro">Gemini (gemini-pro)</option>
+            <option value="gpt-4o">ChatGPT (gpt-4o)</option>
+            <option value="claude-3-5-sonnet">Claude (claude-3.5)</option>
+          </select>
+          <select id="formatSelect" class="dropdown-mini" title="Output Format">
             <option value="openai">OpenAI JSON</option>
-            <option value="code">Code Blocks Only</option>
-            <option value="markdown">Raw Markdown</option>
+            <option value="code">Code Only</option>
+            <option value="markdown">Markdown</option>
           </select>
         </div>
       </div>
-      <textarea id="promptInput" rows="3" placeholder="Enter prompt to execute via active Gemini session (e.g. Write an async HTTP client in Python)..."></textarea>
+      <textarea id="promptInput" rows="3" placeholder="Enter prompt to execute via active browser session (e.g. Write a thread-safe LRU cache in Rust)..."></textarea>
       
       <div class="action-row">
         <div class="stats-mini" id="requestStats">
-          Total Requests: <span id="statCount">0</span>
+          Total Calls: <span id="statCount">0</span>
         </div>
-        <button id="sendBtn" class="btn btn-primary">
-          <span id="btnIcon">🚀</span> Run Prompt
-        </button>
+        <div class="btn-group-right">
+          <button id="copyCurlBtn" class="btn btn-secondary btn-sm" title="Copy OpenAI cURL command">
+            <span>📋</span> cURL
+          </button>
+          <button id="sendBtn" class="btn btn-primary">
+            <span id="btnIcon">🚀</span> Run Prompt
+          </button>
+        </div>
       </div>
     </div>
 
@@ -74,7 +96,7 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <span>Bridge endpoint: <code>http://127.0.0.1:8000/v1/chat/completions</code></span>
+      <span>API Endpoint: <code>http://127.0.0.1:8000/v1/chat/completions</code></span>
     </footer>
   </div>
 

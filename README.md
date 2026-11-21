@@ -35,6 +35,27 @@ itself receives.
 > the matching phase is finished; until then treat them as the target behaviour. Each guide says which
 > parts depend on later phases.
 
+## Client SDKs & Libraries
+
+Connect your applications directly to your standalone Web2API server with official client packages:
+
+| Platform | SDK Package | Real-Time Streaming | Quickstart |
+|---|---|---|---|
+| **🤖 Android (Kotlin)** | [`sdks/android`](sdks/android/) ⭐ *(Top Priority)* | `Kotlin Flow<String>` | [Android Guide](sdks/android/README.md) |
+| **🐍 Python** | [`sdks/python`](sdks/python/) | `Generator` & `AsyncGen` | [Python Guide](sdks/python/README.md) |
+| **💙 Flutter / Dart** | [`sdks/flutter`](sdks/flutter/) | `Stream<String>` | [Flutter Guide](sdks/flutter/README.md) |
+| **⚛️ React / Next.js / TS** | [`sdks/react`](sdks/react/) | `useWeb2ApiChat` Hook | [React Guide](sdks/react/README.md) |
+
+👉 **[View the Master SDK Guide & Cross-Project Integration Documentation](sdks/README.md)**
+
+## Independent Server Deployment
+
+Web2API is completely self-contained and decoupled. You can run it on your local workstation, LAN, VPS, or cloud container:
+
+* **Docker**: `docker compose up -d`
+* **Python**: `python3 bridge_server.py`
+* **Guide**: [Standalone Server Deployment & Security Guide](docs/standalone_server_guide.md)
+
 ## Releases
 
 | Version | What | Status |
@@ -91,6 +112,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) and [`RELEASING.md`](RELEASING.md).
 | [Install on Firefox](docs/install-firefox.md) | Firefox and Firefox forks |
 | [API keys](docs/api-keys.md) | Creating, scoping, rotating and revoking `sk-w2a-…` keys |
 | [API reference](docs/api-reference.md) | Endpoints, parameters, streaming, errors |
+| [Tool Calling & Functions](docs/tool_calling.md) | Standard OpenAI tool calling with resilient JSON/tag parser |
 | [Using it with other tools](docs/compatibility.md) | Cursor, Continue, Open WebUI, LangChain, Aider, … |
 | [MCP server (v2.0.0)](docs/mcp.md) | Use Web2API from Claude Code, Cursor, VS Code, Codex, … |
 | [Deep Research and search (v2.0.0)](docs/research-and-search.md) | Cited answers and long research reports |

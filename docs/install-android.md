@@ -42,7 +42,7 @@ Your laptop calls the API over **SSH** or **Tailscale**.
 
 ```bash
 pkg install -y git
-git clone https://github.com/seeramsujay/web2api.git ~/web2api
+git clone https://github.com/AdityaTummuri/web2api.git ~/web2api
 cd ~/web2api
 bash install.sh --with-ssh          # detects Termux automatically
 # add --boot to start Web2API automatically when the phone boots (needs Termux:Boot)

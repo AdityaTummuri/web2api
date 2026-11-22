@@ -210,6 +210,19 @@ bash scripts/android/doctor.sh
 Checks dependencies, keys, the server, the extension connection, auth enforcement, sshd and
 free memory.
 
+## Status and known issues (tested on a real phone)
+
+Tested end to end on a Vivo Y91i (Android 8.1, 3 GB RAM) with Termux, Firefox Nightly and Tailscale.
+
+| Part | Status |
+|---|---|
+| Install (prebuilt wheel) | ✅ ~2 min fresh, <1 min reinstall |
+| Server, auth, SSH and Tailscale modes | ✅ 56 MB RAM, 0.1–0.25 s bridge overhead, survives screen-off |
+| Extension install + pairing code | ✅ Firefox Nightly, extension 2.0.6 |
+| ChatGPT: type and send the prompt | ✅ ChatGPT receives and answers it |
+| ChatGPT: read the reply back | ❌ **Not working yet on mobile ChatGPT.** The reply isn't in the page DOM the extension sees (only the header and composer). 2.0.6 adds iframe/shadow-DOM search and diagnostics to investigate |
+| Gemini / Claude on mobile | Not tested yet |
+
 ## Troubleshooting
 
 | Symptom | Fix |

@@ -91,7 +91,7 @@ async function connectBridge() {
         type: "HANDSHAKE",
         client: "firefox-extension",
         browser: "firefox-zen",
-        version: "2.0.0",
+        version: ext.runtime.getManifest().version,
         endpoint: currentBridgeUrl
       }));
     };
@@ -136,6 +136,16 @@ function scheduleReconnect() {
  * Ensures content script is injected even into tabs opened before the extension was loaded
  */
 async function ensureContentScriptInjected(tabId) {
+  // Android (Firefox for Android) freezes background tabs: messages and script
+  // injection into them fail. Bring the chat tab to the front before using it.
+  try {
+    const tab = await ext.tabs.get(tabId);
+    if (tab && (!tab.active || tab.discarded)) {
+      await ext.tabs.update(tabId, { active: true });
+      await new Promise(r => setTimeout(r, tab.discarded ? 3000 : 600));
+    }
+  } catch (e) {}
+
   try {
     const ping = await ext.tabs.sendMessage(tabId, { action: "PING" });
     if (ping && ping.status === "ok") return true;
@@ -152,8 +162,13 @@ async function ensureContentScriptInjected(tabId) {
       await ext.tabs.executeScript(tabId, { file: "parser.js" });
       await ext.tabs.executeScript(tabId, { file: "content.js" });
     }
-    // Give script a moment to initialize
-    await new Promise(r => setTimeout(r, 200));
+    // Give script a moment to initialize, then confirm it answers
+    await new Promise(r => setTimeout(r, 300));
+    const ping = await ext.tabs.sendMessage(tabId, { action: "PING" }).catch(() => null);
+    if (ping && ping.status === "ok") return true;
+    // Orphaned/frozen page (e.g. after an extension update): reload it once
+    await ext.tabs.reload(tabId);
+    await new Promise(r => setTimeout(r, 4000));
     return true;
   } catch (err) {
     console.warn("[Web2API Background] Dynamic injection failed for tab:", tabId, err);

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Web2API Pro - Browser Chat to API Bridge",
-  "version": "2.0.1",
+  "version": "2.0.6",
   "description": "Transforms your active browser AI chat sessions (Gemini, ChatGPT, Claude) into a high-speed, local OpenAI-compatible API.",
   "browser_specific_settings": {
     "gecko": {

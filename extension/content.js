@@ -55,10 +55,15 @@
         'div[id="prompt-textarea"][contenteditable="true"]',
         'textarea[data-id="root"]',
         'div[contenteditable="true"][data-placeholder]',
-        'textarea'
+        'div.ProseMirror[contenteditable]',
+        'form [contenteditable]:not([contenteditable="false"])',
+        '[role="textbox"]',
+        'textarea',
+        '[contenteditable]:not([contenteditable="false"])'
       ],
       sendButton: [
         'button[data-testid="send-button"]',
+        '#composer-submit-button',
         'button[aria-label*="Send" i]',
         'button[aria-label*="submit" i]'
       ],
@@ -68,9 +73,12 @@
       ],
       messages: [
         '[data-message-author-role="assistant"]',
+        '[data-testid^="conversation-turn"] .markdown',
         'div.agent-turn',
-        'article',
-        '.markdown'
+        '.markdown.prose',
+        '.markdown',
+        '.prose',
+        'article'
       ],
       newChat: [
         'a[href="/"]',
@@ -147,26 +155,106 @@
     return SELECTORS[p] || SELECTORS.generic;
   }
 
+  function shadowRoots(root = document) {
+    const roots = [];
+    const walk = (node) => {
+      for (const el of node.querySelectorAll("*")) {
+        if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot); }
+      }
+    };
+    try { walk(root); } catch (e) {}
+    return roots;
+  }
+
   function findElement(selectorList, parent = document) {
     if (!selectorList) return null;
-    for (const sel of selectorList) {
-      try {
-        const el = parent.querySelector(sel);
-        if (el && isElementVisible(el)) return el;
-      } catch (e) {}
+    const scopes = [parent];
+    let shadowsLoaded = false;
+    for (let i = 0; i < scopes.length || !shadowsLoaded; i++) {
+      if (i >= scopes.length) { scopes.push(...shadowRoots(parent)); shadowsLoaded = true; if (i >= scopes.length) break; }
+      for (const sel of selectorList) {
+        try {
+          const el = scopes[i].querySelector(sel);
+          if (el && isElementVisible(el)) return el;
+        } catch (e) {}
+      }
     }
     return null;
   }
 
+  async function waitForElement(selectorList, timeoutMs = 10000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const el = findElement(selectorList);
+      if (el) return el;
+      await new Promise(r => setTimeout(r, 400));
+    }
+    return null;
+  }
+
+  // Same-origin iframes (some mobile layouts render the thread inside one).
+  function frameDocuments(root = document) {
+    const docs = [];
+    for (const f of root.querySelectorAll("iframe")) {
+      try { if (f.contentDocument && f.contentDocument.body) docs.push(f.contentDocument); } catch (e) {}
+    }
+    return docs;
+  }
+
   function findAllElements(selectorList, parent = document) {
     if (!selectorList) return [];
+    const scopes = parent === document ? [document, ...frameDocuments(), ...shadowRoots()] : [parent];
     for (const sel of selectorList) {
-      try {
-        const list = parent.querySelectorAll(sel);
-        if (list && list.length > 0) return Array.from(list);
-      } catch (e) {}
+      for (const scope of scopes) {
+        try {
+          const list = scope.querySelectorAll(sel);
+          if (list && list.length > 0) return Array.from(list);
+        } catch (e) {}
+      }
     }
     return [];
+  }
+
+  // Compact page diagnostics for error messages (no page text, only structure).
+  function describeInputs(selectorList) {
+    const q = (sel) => { try { return document.querySelectorAll(sel).length; } catch (e) { return -1; } };
+    const testids = Array.from(new Set(Array.from(document.querySelectorAll("[data-testid]")).map(e => e.getAttribute("data-testid")))).slice(0, 12);
+    const editables = Array.from(document.querySelectorAll("[contenteditable]")).slice(0, 3)
+      .map(e => `${e.tagName.toLowerCase()}#${e.id || "-"}.${(e.className || "").toString().split(" ").slice(0, 2).join(".")}[ce=${e.getAttribute("contenteditable")}]`);
+    const parts = [
+      `url=${location.origin}${location.pathname}`,
+      `ready=${document.readyState}`,
+      `vis=${document.visibilityState}`,
+      `ua=${/Android/.test(navigator.userAgent) ? "android" : "desktop"}`,
+      `w=${window.innerWidth}`,
+      `els=${q("*")}`,
+      `textarea=${q("textarea")}`,
+      `ce=${q("[contenteditable]")}`,
+      `textbox=${q("[role=textbox]")}`,
+      `input=${q("input")}`,
+      `form=${q("form")}`,
+      `iframe=${q("iframe")}`,
+      `frames=[${Array.from(document.querySelectorAll("iframe")).slice(0, 3).map(f => {
+        let info = "";
+        try { const d = f.contentDocument; info = d ? `same-origin,els=${d.querySelectorAll("*").length},text=${(d.body && d.body.innerText || "").length}` : "cross-origin"; } catch (e) { info = "cross-origin"; }
+        return `${(f.getAttribute("src") || "about:blank").slice(0, 60)}(${info},${f.offsetWidth}x${f.offsetHeight})`;
+      }).join(" ")}]`,
+      `main=${(document.querySelector("main") && document.querySelector("main").innerText || "").length}`,
+      `shadow=${shadowRoots().length}`,
+      `bodyText=${(document.body && document.body.innerText || "").length}`,
+      `editables=[${editables.join(" ")}]`,
+      `testids=[${testids.join(",")}]`
+    ];
+    for (const sel of selectorList || []) {
+      try {
+        const all = Array.from(document.querySelectorAll(sel));
+        if (!all.length) continue;
+        const shown = all.filter(isElementVisible).length;
+        const st = window.getComputedStyle(all[0]);
+        parts.push(`${sel}:${all.length}/${shown}vis(d=${st.display},v=${st.visibility},o=${st.opacity})`);
+      } catch (e) {}
+    }
+    return parts.join(" ");
   }
 
   function isElementVisible(el) {
@@ -181,10 +269,10 @@
    */
   async function typePrompt(text) {
     const selectors = getPlatformSelectors();
-    const inputEl = findElement(selectors.input);
+    const inputEl = await waitForElement(selectors.input);
 
     if (!inputEl) {
-      throw new Error(`Chat input box not found on ${detectPlatform().toUpperCase()}. Ensure you are logged in and on the chat page.`);
+      throw new Error(`Chat input box not found on ${detectPlatform().toUpperCase()}. Ensure you are logged in and on the chat page. [diag: ${describeInputs(selectors.input)}]`);
     }
 
     inputEl.focus();
@@ -329,7 +417,7 @@
       if (msgs.length > 0) {
         targetMessage = msgs[msgs.length - 1];
       } else {
-        throw new Error("Timed out waiting for response message container to appear.");
+        throw new Error(`Timed out waiting for response message container to appear. [diag: ${describeInputs(selectors.messages)} roles=[${Array.from(new Set(Array.from(document.querySelectorAll("[data-message-author-role]")).map(e => e.getAttribute("data-message-author-role")))).join(",")}] articles=${document.querySelectorAll("article").length} turns=${document.querySelectorAll("[data-testid^=conversation-turn]").length}]`);
       }
     }
 

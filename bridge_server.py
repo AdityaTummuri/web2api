@@ -11,6 +11,7 @@ import ipaddress
 import json
 import os
 import re
+import socket
 import sys
 import time
 import uuid
@@ -27,8 +28,9 @@ from tool_parser import format_conversation_with_tools, parse_tool_calls
 from web2api_keys import keys_file_path, load_keys
 
 # Configuration
-# Loopback by default: exposing the bridge on a network is an explicit opt-in
-# (e.g. HOST=0.0.0.0, or HOST=<tailscale-ip> to listen on the tailnet only).
+# Loopback by default: exposing the bridge on a network is an explicit opt-in.
+# HOST may list several addresses, e.g. HOST=127.0.0.1,100.101.102.103 listens on
+# loopback (for the local browser) plus the Tailscale address only, not on Wi-Fi/LAN.
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8000"))
 CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
@@ -719,16 +721,41 @@ async def reset_conversation(raw_request: Request):
     return {"status": "success", "message": "Conversation thread reset", "details": res}
 
 
+def parse_hosts(raw: str) -> List[str]:
+    """Split a comma-separated HOST value into addresses (defaults to loopback)."""
+    return [h.strip() for h in raw.split(",") if h.strip()] or ["127.0.0.1"]
+
+
+def bind_sockets(hosts: List[str], port: int) -> List[socket.socket]:
+    """Pre-bind one listening socket per address so uvicorn can serve them all."""
+    sockets = []
+    for host in hosts:
+        family = socket.AF_INET6 if ":" in host else socket.AF_INET
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((host, port))
+        sock.set_inheritable(True)
+        sockets.append(sock)
+    return sockets
+
+
 if __name__ == "__main__":
-    problem = check_startup_security(HOST)
-    if problem:
-        print(f"[ERROR] {problem}", file=sys.stderr)
-        sys.exit(1)
-    print(f"[INFO] Launching Web2API Universal Bridge Server on http://{HOST}:{PORT}")
-    print(f"[INFO] WebSocket endpoints: ws://{HOST}:{PORT}/ws, ws://{HOST}:{PORT}/ws/extension")
+    hosts = parse_hosts(HOST)
+    for bind_host in hosts:
+        problem = check_startup_security(bind_host)
+        if problem:
+            print(f"[ERROR] {problem}", file=sys.stderr)
+            sys.exit(1)
+    for bind_host in hosts:
+        print(f"[INFO] Launching Web2API Universal Bridge Server on http://{bind_host}:{PORT}")
+    print(f"[INFO] WebSocket endpoints: /ws, /ws/extension on port {PORT}")
     if auth_required():
         print(f"[INFO] Security: API key authentication ENABLED ({len(get_allowed_api_keys())} key(s)).")
         print("[INFO] Extension bridge URL must include ?token=<key>  (see api.txt)")
     else:
         print("[INFO] Security: no API key configured - loopback-only open access.")
-    uvicorn.run("bridge_server:app", host=HOST, port=PORT, reload=False)
+    if len(hosts) == 1:
+        uvicorn.run("bridge_server:app", host=hosts[0], port=PORT, reload=False)
+    else:
+        server = uvicorn.Server(uvicorn.Config(app, port=PORT, reload=False))
+        server.run(sockets=bind_sockets(hosts, PORT))

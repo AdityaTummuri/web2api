@@ -105,3 +105,16 @@ def test_allows_network_bind_with_keys(keyed):
 def test_insecure_override(monkeypatch):
     monkeypatch.setenv("WEB2API_ALLOW_INSECURE", "1")
     assert check_startup_security("0.0.0.0") is None
+
+
+def test_parse_hosts():
+    from bridge_server import parse_hosts
+
+    assert parse_hosts("127.0.0.1, 100.64.1.2") == ["127.0.0.1", "100.64.1.2"]
+    assert parse_hosts("") == ["127.0.0.1"]
+
+
+def test_multi_host_refuses_without_keys():
+    from bridge_server import parse_hosts
+
+    assert [h for h in parse_hosts("127.0.0.1,100.64.1.2") if check_startup_security(h)] == ["100.64.1.2"]

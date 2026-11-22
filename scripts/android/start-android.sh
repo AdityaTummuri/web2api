@@ -5,8 +5,9 @@
 # Modes (WEB2API_MODE):
 #   ssh        (default) bind 127.0.0.1 only. Your laptop reaches it through an
 #              SSH tunnel: nothing is exposed to any network. Also starts sshd.
-#   tailscale  bind 0.0.0.0 so laptops on your tailnet can call it directly
-#              (API key always required). Prints the phone's Tailscale address.
+#   tailscale  bind 127.0.0.1 + the phone's Tailscale IP, so laptops on your
+#              tailnet can call it directly (API key always required) while it
+#              stays unreachable on Wi-Fi/LAN.
 #
 # Env: PORT (default 8000)
 # ==============================================================================
@@ -56,8 +57,12 @@ case "$MODE" in
         fi
         ;;
     tailscale)
-        HOST="0.0.0.0"
-        [ -n "$TS_IP" ] || warn "Tailscale address not detected - is the Tailscale app connected on this phone?"
+        if [ -n "$TS_IP" ]; then
+            # Loopback for Firefox on this phone + the Tailscale address only: not reachable on Wi-Fi/LAN.
+            HOST="127.0.0.1,$TS_IP"
+        else
+            die "Tailscale address not detected - open the Tailscale app and connect, then retry (or use WEB2API_MODE=ssh)."
+        fi
         ;;
     *)
         die "Unknown WEB2API_MODE '$MODE' (use: ssh | tailscale)"

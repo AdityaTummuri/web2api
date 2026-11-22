@@ -54,8 +54,12 @@ What it does:
 - generates **this phone's own random API keys** in `~/web2api/api.txt` (permissions 600, never committed)
 - with `--with-ssh`, installs OpenSSH so your laptop can log in
 
-> First run can take a while if `pydantic-core` has to compile from source (Rust).
-> That is a one-time cost of roughly 10–20 minutes on an older phone.
+> **First install compiles `pydantic-core` (Rust) when Termux has no prebuilt wheel for its Python.**
+> Measured on a Vivo Y91i (Android 8.1, 3 GB RAM): **~25 minutes** and ~650 MB of disk for Rust.
+> The installer holds a wake lock and compiles with 2 parallel jobs (`WEB2API_BUILD_JOBS`) so Android
+> doesn't kill Termux halfway. Keep Termux open and the phone charging. The wheel is kept in
+> `.wheels/`, so reinstalls take **under a minute**. Copying a `pydantic_core-*-android_24_arm64_v8a.whl`
+> from another phone into `.wheels/` skips the compile entirely.
 
 ## 2. Start the server
 
@@ -64,7 +68,7 @@ Choose how your laptop will connect:
 | Mode | Command | Exposure |
 |---|---|---|
 | **SSH** (default, most private) | `bash scripts/android/start-android.sh` | Listens on `127.0.0.1` only; the laptop uses an SSH tunnel |
-| **Tailscale** | `WEB2API_MODE=tailscale bash scripts/android/start-android.sh` | Listens on all interfaces; **API key always required**. Use it on your tailnet |
+| **Tailscale** | `WEB2API_MODE=tailscale bash scripts/android/start-android.sh` | Listens on `127.0.0.1` + the phone's Tailscale IP only (not on Wi-Fi/LAN); **API key always required** |
 
 The script grabs a wake lock (so Android doesn't suspend it) and prints the exact bridge URL and laptop
 command you need.
@@ -199,7 +203,9 @@ free memory.
 
 | Symptom | Fix |
 |---|---|
-| `pip` fails building `pydantic-core` | `pkg install rust binutils`, then `export ANDROID_API_LEVEL=$(getprop ro.build.version.sdk)` and re-run the installer |
+| `pip` fails building `pydantic-core` | Re-run the installer; it compiles with the Termux `maturin` package. Lower memory use with `WEB2API_BUILD_JOBS=1` |
+| Termux/SSH disappears during install | Android killed Termux (low memory or battery manager). Allow Termux background activity, keep it in the foreground, re-run the installer; finished parts are skipped |
+| `… android_27_arm64_v8a.whl is not a supported wheel` | Wheel tagged with the phone's API level instead of Termux Python's (24). Fixed in the installer; pull the latest branch and re-run |
 | `Refusing to listen on 0.0.0.0 without an API key` | Run `python web2api_keys.py generate`, or use SSH mode |
 | `503 Browser Extension is not connected` | Open Firefox; check the popup bridge URL includes `?token=<key>`; tap Connect |
 | `401 Unauthorized` | Send `Authorization: Bearer <key>` with a key from the phone's `api.txt` |

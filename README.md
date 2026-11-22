@@ -52,6 +52,7 @@ Connect your applications directly to your standalone Web2API server with offici
 
 Web2API is completely self-contained and decoupled. You can run it on your local workstation, LAN, VPS, or cloud container:
 
+* **Android phone** 📱: run the server *and* the browser on a spare phone, reach it from your laptop over SSH or Tailscale → [docs/install-android.md](docs/install-android.md)
 * **Docker**: `docker compose up -d`
 * **Python**: `python3 bridge_server.py`
 * **Guide**: [Standalone Server Deployment & Security Guide](docs/standalone_server_guide.md)
@@ -110,6 +111,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) and [`RELEASING.md`](RELEASING.md).
 | [Install the bridge](docs/install-bridge.md) | Binary or Python, run at login (Linux, macOS, Windows) |
 | [Install on Chrome](docs/install-chrome.md) | Chrome, Edge, Brave, other Chromium browsers |
 | [Install on Firefox](docs/install-firefox.md) | Firefox and Firefox forks |
+| [Run on an Android phone](docs/install-android.md) | Termux server + Firefox for Android, connect via SSH or Tailscale |
 | [API keys](docs/api-keys.md) | Creating, scoping, rotating and revoking `sk-w2a-…` keys |
 | [API reference](docs/api-reference.md) | Endpoints, parameters, streaming, errors |
 | [Tool Calling & Functions](docs/tool_calling.md) | Standard OpenAI tool calling with resilient JSON/tag parser |

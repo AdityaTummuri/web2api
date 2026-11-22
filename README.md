@@ -52,54 +52,9 @@ Connect your applications directly to your standalone Web2API server with offici
 
 Web2API is completely self-contained and decoupled. You can run it on your local workstation, LAN, VPS, or cloud container:
 
-* **Android phone** 📱: run the server *and* the browser on a spare phone, reach it from your laptop over SSH or Tailscale → [see below](#-run-it-on-an-android-phone)
 * **Docker**: `docker compose up -d`
 * **Python**: `python3 bridge_server.py`
 * **Guide**: [Standalone Server Deployment & Security Guide](docs/standalone_server_guide.md)
-
-## 📱 Run it on an Android phone
-
-Got a spare Android phone (3 GB RAM is enough)? Turn it into an always-on Web2API server. The phone
-runs **both** the bridge (in Termux) and the logged-in browser (Firefox for Android + the extension).
-Your laptop calls it over **SSH** or **Tailscale**.
-
-```
- Laptop (editor / SDK / curl)
-      │  SSH tunnel  or  Tailscale
-      ▼
- Android phone ── Termux: bridge_server.py (127.0.0.1:8000)
-                    ▲ ws://127.0.0.1:8000/ws?token=<key>
-                  Firefox for Android + Web2API extension ──► chatgpt.com / gemini / claude.ai
-```
-
-**On the phone (Termux from F-Droid or GitHub):**
-```bash
-pkg install -y git
-git clone https://github.com/AdityaTummuri/web2api.git ~/web2api && cd ~/web2api
-bash install.sh --with-ssh                       # auto-detects Termux, generates this phone's keys
-bash scripts/android/start-android.sh            # SSH mode (private, default)
-# or: WEB2API_MODE=tailscale bash scripts/android/start-android.sh
-```
-Then install the extension in Firefox for Android, paste the bridge URL that the start script prints
-(`ws://127.0.0.1:8000/ws?token=…`), log in to a chat site, and keep that tab open.
-
-**On the laptop:**
-```bash
-scripts/android/connect-from-laptop.sh <phone-ip-or-tailscale-name> <termux-user>   # SSH tunnel
-# then use http://127.0.0.1:8000/v1   (Tailscale mode: http://<phone>:8000/v1)
-```
-
-| Helper | What it does |
-|---|---|
-| `scripts/android/install-termux.sh` | Lightweight install (no Playwright); `--with-ssh`, `--boot` |
-| `scripts/android/start-android.sh` | Wake lock, sshd, picks bind address, prints bridge URL + laptop command |
-| `scripts/android/doctor.sh` | Checks deps, keys, server, extension connection, auth, sshd, free RAM |
-| `scripts/android/connect-from-laptop.sh` | Opens the SSH tunnel from your laptop and verifies `/health` |
-| `make android-install` / `android-start` / `android-doctor` | Same, via make |
-
-Android only (no iOS). Firefox for Android is the supported browser. Turn off battery optimisation
-for Termux, Firefox and Tailscale, and keep the phone charging.
-Full step-by-step guide, extension signing, and troubleshooting: **[docs/install-android.md](docs/install-android.md)**.
 
 ## 🔐 Security model
 
@@ -113,8 +68,8 @@ Full step-by-step guide, extension signing, and troubleshooting: **[docs/install
   a random web page can't impersonate the extension and read your prompts.
 * **Old keys are revoked.** Keys once committed to this repository are rejected permanently. If you
   used them, regenerate.
-* **Remote access:** use an SSH tunnel (nothing exposed) or Tailscale (private tailnet). Avoid
-  exposing the port to public Wi-Fi or the internet.
+* **Remote access:** prefer an SSH tunnel or a private network such as Tailscale. Avoid exposing the
+  port to public Wi-Fi or the internet.
 
 ## Releases
 
@@ -132,7 +87,6 @@ See [`CHANGELOG.md`](CHANGELOG.md) and [`RELEASING.md`](RELEASING.md).
 * Lightweight: one Python dependency (`aiohttp`) or a single standalone binary; no headless browser, no
   second login, near-zero idle CPU.
 * Private by design: loopback-only by default, per-install API keys enforced, no telemetry.
-* Runs on a spare **Android phone** as an always-on server, reachable from your laptop via SSH or Tailscale.
 * **From v2.0.0, an MCP server** so assistants like Claude Code and Cursor can use the browser-only goodies —
   Deep Research, built-in web search, and a near-free Flash-Lite lane for chores — see [docs/mcp.md](docs/mcp.md).
 
@@ -171,7 +125,6 @@ See [`CHANGELOG.md`](CHANGELOG.md) and [`RELEASING.md`](RELEASING.md).
 | [Install the bridge](docs/install-bridge.md) | Binary or Python, run at login (Linux, macOS, Windows) |
 | [Install on Chrome](docs/install-chrome.md) | Chrome, Edge, Brave, other Chromium browsers |
 | [Install on Firefox](docs/install-firefox.md) | Firefox and Firefox forks |
-| [Run on an Android phone](docs/install-android.md) | Termux server + Firefox for Android, connect via SSH or Tailscale |
 | [API keys](docs/api-keys.md) | Creating, scoping, rotating and revoking `sk-w2a-…` keys |
 | [API reference](docs/api-reference.md) | Endpoints, parameters, streaming, errors |
 | [Tool Calling & Functions](docs/tool_calling.md) | Standard OpenAI tool calling with resilient JSON/tag parser |

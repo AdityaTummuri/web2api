@@ -7,9 +7,6 @@
     "gecko": {
       "id": "web2api@web2api.local",
       "strict_min_version": "109.0"
-    },
-    "gecko_android": {
-      "strict_min_version": "120.0"
     }
   },
   "permissions": [

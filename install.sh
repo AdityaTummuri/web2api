@@ -45,12 +45,6 @@ cd "$ROOT_DIR"
 
 print_banner
 
-# Android phones (Termux) use a dedicated lightweight installer.
-if [ -n "${TERMUX_VERSION:-}" ] || [[ "${PREFIX:-}" == *"com.termux"* ]]; then
-    log_info "Termux (Android) detected - switching to scripts/android/install-termux.sh"
-    exec bash "$ROOT_DIR/scripts/android/install-termux.sh" "$@"
-fi
-
 # ------------------------------------------------------------------------------
 # 1. System Requirements & Python Detection
 # ------------------------------------------------------------------------------

@@ -75,7 +75,13 @@ echo "==========================================================================
 echo " Web2API on Android  -  mode: $MODE"
 echo "================================================================================"
 echo " 1) In Firefox on THIS phone, open the Web2API extension popup and set Bridge URL:"
-echo "      ws://127.0.0.1:$PORT/ws?token=$KEY"
+if [ -t 1 ]; then
+    echo "      ws://127.0.0.1:$PORT/ws?token=$KEY"
+else
+    # Not a terminal (nohup / Termux:Boot log): never write the key into a log file.
+    echo "      ws://127.0.0.1:$PORT/ws?token=<key>   (key hidden in logs)"
+fi
+echo "    Easiest: run  bash scripts/android/show-bridge-url.sh  and open http://127.0.0.1:8001 in Firefox"
 echo
 echo " 2) On your laptop:"
 if [ "$MODE" = "ssh" ]; then

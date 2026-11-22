@@ -9,6 +9,7 @@ import asyncio
 import hmac
 import ipaddress
 import json
+import logging
 import os
 import re
 import socket
@@ -35,6 +36,25 @@ HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8000"))
 CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
 CORS_ORIGINS = [orig.strip() for orig in CORS_ORIGINS_RAW.split(",") if orig.strip()] or ["*"]
+
+TOKEN_IN_URL = re.compile(r"((?:token|key)=)[^&\s\"']+", re.IGNORECASE)
+
+
+class RedactTokensFilter(logging.Filter):
+    """Mask ?token=/?key= values so API keys never end up in uvicorn access logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.args:
+            record.args = tuple(
+                TOKEN_IN_URL.sub(r"\1***", a) if isinstance(a, str) else a for a in record.args
+            )
+        if isinstance(record.msg, str):
+            record.msg = TOKEN_IN_URL.sub(r"\1***", record.msg)
+        return True
+
+
+for _logger_name in ("uvicorn.access", "uvicorn.error", "uvicorn"):
+    logging.getLogger(_logger_name).addFilter(RedactTokensFilter())
 
 app = FastAPI(
     title="Web2API Universal Bridge Server",

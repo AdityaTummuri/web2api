@@ -81,6 +81,8 @@ command you need.
 ## 3. Install the extension in Firefox for Android
 
 Firefox for Android only installs **signed** extensions, except on Nightly/Beta. Pick one route.
+Regular Firefox **silently ignores** an unsigned `.xpi`, so if Web2API doesn't appear under Extensions,
+you're probably on regular Firefox: use route A or B.
 
 **A. Signed `.xpi` (works on regular Firefox, recommended for everyone)**
 
@@ -107,8 +109,10 @@ cd extension && npm run build && npm run run:android -- --android-device=<adb de
 ### Pair the extension with the server
 
 1. In Firefox, open the menu → *Extensions* → **Web2API** to open the popup.
-2. Paste the bridge URL that `start-android.sh` printed, including the token:
-   `ws://127.0.0.1:8000/ws?token=sk-w2a-dev-…` and tap **Connect**.
+2. Get the bridge URL without typing the long key: in Termux run
+   `bash scripts/android/show-bridge-url.sh`, open **http://127.0.0.1:8001** in Firefox and tap **Copy**.
+   (The page is reachable only from the phone and closes after 5 minutes.)
+   Paste it into the popup's Bridge URL box (`ws://127.0.0.1:8000/ws?token=sk-w2a-dev-…`) and tap **Connect**.
 3. In the same Firefox, log in to the chat site you want to use (ChatGPT, Gemini or Claude) and
    **leave that tab open**.
 

@@ -118,3 +118,15 @@ def test_multi_host_refuses_without_keys():
     from bridge_server import parse_hosts
 
     assert [h for h in parse_hosts("127.0.0.1,100.64.1.2") if check_startup_security(h)] == ["100.64.1.2"]
+
+
+def test_tokens_are_redacted_from_logs():
+    import logging
+
+    from bridge_server import RedactTokensFilter
+
+    rec = logging.LogRecord("uvicorn.error", logging.INFO, __file__, 1,
+                            '%s - "WebSocket %s" [accepted]', ("127.0.0.1:1", "/ws?token=sk-w2a-dev-secret123456789"), None)
+    RedactTokensFilter().filter(rec)
+    assert "secret" not in rec.getMessage()
+    assert "token=***" in rec.getMessage()

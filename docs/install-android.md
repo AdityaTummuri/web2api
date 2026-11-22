@@ -54,12 +54,14 @@ What it does:
 - generates **this phone's own random API keys** in `~/web2api/api.txt` (permissions 600, never committed)
 - with `--with-ssh`, installs OpenSSH so your laptop can log in
 
-> **First install compiles `pydantic-core` (Rust) when Termux has no prebuilt wheel for its Python.**
-> Measured on a Vivo Y91i (Android 8.1, 3 GB RAM): **~25 minutes** and ~650 MB of disk for Rust.
-> The installer holds a wake lock and compiles with 2 parallel jobs (`WEB2API_BUILD_JOBS`) so Android
-> doesn't kill Termux halfway. Keep Termux open and the phone charging. The wheel is kept in
-> `.wheels/`, so reinstalls take **under a minute**. Copying a `pydantic_core-*-android_24_arm64_v8a.whl`
-> from another phone into `.wheels/` skips the compile entirely.
+> **`pydantic-core` (a compiled Rust package) is the only slow part.** On Termux with **Python 3.14 on
+> ARM64** the installer downloads a prebuilt, checksum-verified copy from the
+> [`android-wheels-v1` release](https://github.com/seeramsujay/web2api/releases/tag/android-wheels-v1),
+> so the whole install takes about a minute. On other setups it compiles it instead. Measured on a
+> Vivo Y91i (Android 8.1, 3 GB RAM): **~25 minutes**, plus ~650 MB of disk for Rust. While compiling
+> it holds a wake lock and runs 2 parallel jobs (`WEB2API_BUILD_JOBS`), so Android doesn't kill Termux.
+> Keep Termux open and the phone charging. The compiled wheel is kept in `.wheels/`, so reinstalls
+> are fast. Set `WEB2API_PREBUILT=0` to always compile from source.
 
 ## 2. Start the server
 

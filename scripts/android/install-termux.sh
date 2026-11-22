@@ -18,6 +18,30 @@ ok()   { echo -e "\033[1;32m[ OK ]\033[0m $1"; }
 warn() { echo -e "\033[1;33m[WARN]\033[0m $1"; }
 die()  { echo -e "\033[1;31m[FAIL]\033[0m $1" >&2; exit 1; }
 
+# Prebuilt pydantic-core (Termux, Python 3.14, aarch64) published as a GitHub release,
+# so most phones skip the ~25 min Rust compile. Set WEB2API_PREBUILT=0 to always compile.
+PREBUILT_URL="https://github.com/seeramsujay/web2api/releases/download/android-wheels-v1/pydantic_core-2.50.5-cp314-cp314-android_24_arm64_v8a.whl"
+PREBUILT_SHA256="07622349389dc422674292b9d3032932fcf9add3818ea25c2794d79b8ae885f9"
+CONSTRAINTS="$ROOT_DIR/scripts/android/constraints-termux.txt"
+
+fetch_prebuilt_wheel() {
+    [ "${WEB2API_PREBUILT:-1}" = 1 ] || return 0
+    ls "$ROOT_DIR"/.wheels/pydantic_core-*.whl >/dev/null 2>&1 && return 0
+    "$PY_BIN" -c "import sys, platform; sys.exit(0 if sys.version_info[:2] == (3, 14) and platform.machine() == 'aarch64' else 1)" \
+        || { info "No prebuilt pydantic-core for this Python/CPU; it will be compiled"; return 0; }
+    local dest
+    dest="$ROOT_DIR/.wheels/$(basename "$PREBUILT_URL")"
+    mkdir -p "$ROOT_DIR/.wheels"
+    if curl -fsSL -o "$dest.part" "$PREBUILT_URL" \
+        && echo "$PREBUILT_SHA256  $dest.part" | sha256sum -c --status; then
+        mv "$dest.part" "$dest"
+        ok "Downloaded prebuilt pydantic-core (checksum verified)"
+    else
+        rm -f "$dest.part"
+        warn "Could not download/verify the prebuilt pydantic-core; it will be compiled"
+    fi
+}
+
 # Compile pydantic-core with the Termux-packaged maturin CLI. Letting pip do it
 # would also compile maturin itself from source (much slower, more memory).
 build_pydantic_core() {
@@ -30,7 +54,7 @@ build_pydantic_core() {
     local jobs="${WEB2API_BUILD_JOBS:-2}"
 
     # The exact pydantic-core version pinned by the pydantic release pip picks.
-    "$PY_BIN" -m pip install --no-deps -r <(grep -E '^pydantic' requirements-server.txt)
+    "$PY_BIN" -m pip install --no-deps -c "$CONSTRAINTS" -r <(grep -E '^pydantic' requirements-server.txt)
     local ver
     ver="$("$PY_BIN" -c "from importlib.metadata import requires; print(next(r for r in requires('pydantic') if r.startswith('pydantic-core')).split('==')[1].split(';')[0].strip())")"
     info "Building pydantic-core $ver with $jobs parallel jobs..."
@@ -92,11 +116,12 @@ PY_BIN="$ROOT_DIR/.venv/bin/python"
 
 info "3/5 Installing server dependencies (requirements-server.txt)..."
 # .wheels/ holds a pydantic-core wheel from an earlier build (or one you copied in), so reinstalls skip the compile.
-if ! "$PY_BIN" -m pip install --find-links "$ROOT_DIR/.wheels" --only-binary=pydantic-core -r requirements-server.txt; then
+fetch_prebuilt_wheel
+if ! "$PY_BIN" -m pip install --find-links "$ROOT_DIR/.wheels" --only-binary=pydantic-core -c "$CONSTRAINTS" -r requirements-server.txt; then
     warn "No prebuilt pydantic-core for this Python - compiling it (needs Rust, ~650 MB disk, 15-30 min on a phone)."
     warn "Keep Termux open and the phone charging until this finishes."
     build_pydantic_core || die "Dependency install failed. See docs/install-android.md#troubleshooting"
-    "$PY_BIN" -m pip install -r requirements-server.txt \
+    "$PY_BIN" -m pip install -c "$CONSTRAINTS" -r requirements-server.txt \
         || die "Dependency install failed. See docs/install-android.md#troubleshooting"
 fi
 "$PY_BIN" -c "import fastapi, uvicorn, pydantic, websockets" || die "Server dependencies did not import correctly"

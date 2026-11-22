@@ -1,0 +1,4 @@
+# Pins used on Android/Termux so the prebuilt pydantic-core wheel from the
+# android-wheels GitHub release matches. Bump both together with a new release.
+pydantic==2.14.4
+pydantic-core==2.50.5

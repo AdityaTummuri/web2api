@@ -4,13 +4,16 @@ test_openai_client.py - Official OpenAI SDK Conformance Test for Web2API
 Demonstrates standard OpenAI Python SDK connectivity against the local Web2API bridge.
 """
 
+import os
 import sys
 import time
 from openai import OpenAI
 
-# API configuration from api.txt
-BASE_URL = "http://127.0.0.1:8000/v1"
-API_KEY = "sk-w2a-dev-a7d4e1f9b3c820564917a2e8df3c9041"
+from web2api_keys import default_key
+
+# API configuration: WEB2API_BASE / WEB2API_API_KEY, falling back to the local api.txt
+BASE_URL = os.getenv("WEB2API_BASE", "http://127.0.0.1:8000/v1")
+API_KEY = default_key() or "no-key-configured"
 
 
 def main():

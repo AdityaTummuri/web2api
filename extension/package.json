@@ -6,7 +6,9 @@
   "scripts": {
     "test": "node --test test_parser.js",
     "build": "node build.js",
-    "package": "node build.js"
+    "package": "node build.js",
+    "sign:android": "npx --yes web-ext@8 sign --source-dir dist/firefox --channel unlisted --artifacts-dir dist/signed",
+    "run:android": "npx --yes web-ext@8 run --target firefox-android --source-dir dist/firefox"
   },
   "keywords": [
     "firefox-extension",

@@ -12,7 +12,8 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8000
-      - WEB2API_API_KEY=${WEB2API_API_KEY:-}
+      # Required: the container binds 0.0.0.0, so the server will not start without a key.
+      - WEB2API_API_KEY=${WEB2API_API_KEY:?Set WEB2API_API_KEY in .env (python3 web2api_keys.py generate)}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

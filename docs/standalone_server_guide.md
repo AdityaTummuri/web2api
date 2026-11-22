@@ -18,7 +18,7 @@ pip install -r requirements.txt
 # Configure environment (optional API key)
 export HOST=0.0.0.0
 export PORT=8000
-export WEB2API_API_KEY="sk-w2a-secret-key-12345"
+export WEB2API_API_KEY="sk-w2a-live-$(openssl rand -hex 24)"   # required when HOST is not 127.0.0.1
 
 # Run standalone bridge server
 python3 bridge_server.py
@@ -68,8 +68,8 @@ curl http://localhost:8000/health
 
 ### Key Isolation Features:
 * **Decoupled**: Zero dependencies on host OS filesystem beyond standard Python libraries.
-* **Network-Accessible**: Binds to `0.0.0.0` to accept connections from external servers, mobile devices, and desktop applications.
-* **Authentication Safeguards**: Set `WEB2API_API_KEY` to enforce `Authorization: Bearer <token>` on all requests.
+* **Network-Accessible on request**: Binds to `127.0.0.1` by default; set `HOST=0.0.0.0` to accept external connections. The server refuses a non-loopback bind unless an API key is configured.
+* **Authentication Safeguards**: Once any key exists (`WEB2API_API_KEY` or `api.txt`), every request needs `Authorization: Bearer <token>` and the extension WebSocket needs `?token=<key>`.
 * **CORS Configurable**: Control permitted web domains via `CORS_ORIGINS`.
 
 ---

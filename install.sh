@@ -45,6 +45,12 @@ cd "$ROOT_DIR"
 
 print_banner
 
+# Android phones (Termux) use a dedicated lightweight installer.
+if [ -n "${TERMUX_VERSION:-}" ] || [[ "${PREFIX:-}" == *"com.termux"* ]]; then
+    log_info "Termux (Android) detected - switching to scripts/android/install-termux.sh"
+    exec bash "$ROOT_DIR/scripts/android/install-termux.sh" "$@"
+fi
+
 # ------------------------------------------------------------------------------
 # 1. System Requirements & Python Detection
 # ------------------------------------------------------------------------------
@@ -108,29 +114,12 @@ fi
 log_success "All Python dependencies installed successfully."
 
 # ------------------------------------------------------------------------------
-# 4. Generating Default API Credentials
+# 4. Generating Per-Install API Credentials
 # ------------------------------------------------------------------------------
 log_info "Step 4/6: Checking API credentials..."
-if [ ! -f "$ROOT_DIR/api.txt" ]; then
-    log_info "Generating default api.txt..."
-    cat << 'EOF' > "$ROOT_DIR/api.txt"
-================================================================================
-                    Web2API Universal Bridge - API Credentials
-================================================================================
-Base Server URL: http://127.0.0.1:8000
-OpenAI Compatible Base URL: http://127.0.0.1:8000/v1
-WebSocket Bridge URL: ws://127.0.0.1:8000/ws
-
-API KEYS (Bearer token or 'X-API-Key' header):
-1. Dev Key:      sk-w2a-dev-a7d4e1f9b3c820564917a2e8df3c9041
-2. Mobile Key:   sk-w2a-mobile-6c9b3e10fa4872159048a1b3df5e72c8
-3. Research Key: sk-w2a-research-8e2b5c19fa7048361092a4f6de8a3b57
-4. Prod Key:     sk-w2a-prod-3f1a9c40eb8275148902a7c5df6b81e4
-EOF
-    log_success "Created api.txt with generated keys."
-else
-    log_success "api.txt credentials file verified."
-fi
+# Fresh random keys for every install (old committed keys are revoked and replaced).
+"$PY_BIN" "$ROOT_DIR/web2api_keys.py" generate
+log_success "api.txt holds this install's private keys (chmod 600, git-ignored)."
 
 # ------------------------------------------------------------------------------
 # 5. Script Permissions & Validation

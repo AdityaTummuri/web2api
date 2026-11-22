@@ -161,3 +161,17 @@ def test_pairing_code_burns_after_too_many_wrong_guesses(keyed):
 
 def test_pairing_without_active_code(keyed):
     assert _local_client().post("/pair", json={"code": "123456"}).status_code == 403
+
+
+def test_health_hides_client_details_without_key(keyed):
+    bridge_server.hub.stats["client_info"] = bridge_server.sanitize_client_info(
+        {"client": "firefox-extension", "endpoint": f"ws://127.0.0.1:8000/ws?token={keyed[0]}"}
+    )
+    client = TestClient(app)
+    public = client.get("/health").json()
+    assert "active_client" not in public and "stats" not in public
+    assert keyed[0] not in str(public)
+    private = client.get("/health", headers={"Authorization": f"Bearer {keyed[0]}"}).json()
+    assert private["active_client"]["client"] == "firefox-extension"
+    assert keyed[0] not in str(private)
+    bridge_server.hub.stats["client_info"] = None

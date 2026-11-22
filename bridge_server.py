@@ -38,6 +38,7 @@ CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
 CORS_ORIGINS = [orig.strip() for orig in CORS_ORIGINS_RAW.split(",") if orig.strip()] or ["*"]
 
 TOKEN_IN_URL = re.compile(r"((?:token|key)=)[^&\s\"']+", re.IGNORECASE)
+KEY_IN_TEXT = re.compile(r"sk-w2a-[A-Za-z0-9_-]{8,}")
 
 
 class RedactTokensFilter(logging.Filter):
@@ -153,6 +154,18 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+def sanitize_client_info(info: Optional[dict]) -> dict:
+    """Drop/mask anything that could carry a key (e.g. the extension's endpoint URL with ?token=)."""
+    clean = {}
+    for k, v in (info or {}).items():
+        if isinstance(v, str):
+            v = TOKEN_IN_URL.sub(r"\1***", v)
+            if KEY_IN_TEXT.search(v):
+                v = KEY_IN_TEXT.sub("sk-w2a-***", v)
+        clean[k] = v
+    return clean
+
+
 # Global Bridge Connection Hub
 class ExtensionBridgeHub:
     def __init__(self):
@@ -174,8 +187,9 @@ class ExtensionBridgeHub:
     async def connect(self, websocket: WebSocket, client_info: Optional[dict] = None):
         self.active_socket = websocket
         self.stats["connected_since"] = datetime.now().isoformat()
-        self.stats["client_info"] = client_info or {}
-        print(f"[BRIDGE] Extension successfully connected via WebSocket: {client_info}")
+        safe_info = sanitize_client_info(client_info)
+        self.stats["client_info"] = safe_info
+        print(f"[BRIDGE] Extension successfully connected via WebSocket: {safe_info}")
 
     def disconnect(self, websocket: Optional[WebSocket] = None):
         if websocket is not None and self.active_socket != websocket:
@@ -371,16 +385,23 @@ async def pair_extension(body: PairRequest, raw_request: Request):
 
 @app.get("/health")
 @app.get("/status")
-async def get_status():
-    """Returns server and extension connection status."""
-    return {
+async def get_status(request: Request):
+    """
+    Server and extension connection status. Public callers get only the basics;
+    client details and stats need a valid API key once keys are configured.
+    """
+    result = {
         "status": "online",
         "extension_connected": hub.is_connected,
-        "active_client": hub.stats.get("client_info"),
-        "stats": hub.stats,
         "auth_required": auth_required(),
         "timestamp": datetime.now().isoformat(),
     }
+    auth_header = request.headers.get("authorization", "")
+    provided = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else request.headers.get("x-api-key")
+    if not auth_required() or is_valid_key(provided):
+        result["active_client"] = hub.stats.get("client_info")
+        result["stats"] = hub.stats
+    return result
 
 
 @app.get("/v1/models")

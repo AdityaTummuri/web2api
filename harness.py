@@ -22,8 +22,14 @@ from typing import Optional
 import httpx
 import websockets
 
+from web2api_keys import default_key
+
 DEFAULT_API_BASE = os.getenv("WEB2API_BASE", "http://127.0.0.1:8000")
-DEFAULT_WS_URL = os.getenv("WEB2API_WS", "ws://127.0.0.1:8000/ws")
+_API_KEY = default_key()
+AUTH_HEADERS = {"Authorization": f"Bearer {_API_KEY}"} if _API_KEY else {}
+DEFAULT_WS_URL = os.getenv("WEB2API_WS") or (
+    f"ws://127.0.0.1:8000/ws?token={_API_KEY}" if _API_KEY else "ws://127.0.0.1:8000/ws"
+)
 
 # Terminal color formatting
 
@@ -200,7 +206,7 @@ class TestHarness:
         passed = 0
         total = 0
 
-        async with httpx.AsyncClient(base_url=self.api_base, timeout=30.0) as client:
+        async with httpx.AsyncClient(base_url=self.api_base, timeout=30.0, headers=AUTH_HEADERS) as client:
             # 1. Health Endpoint
             total += 1
             is_connected = False
@@ -347,7 +353,7 @@ async def run_terminal_chat(api_base: str = DEFAULT_API_BASE, model: str = "gemi
 
     history = []
 
-    async with httpx.AsyncClient(base_url=api_base, timeout=180.0) as client:
+    async with httpx.AsyncClient(base_url=api_base, timeout=180.0, headers=AUTH_HEADERS) as client:
         while True:
             try:
                 user_input = input(f"{Colors.BOLD}{Colors.GREEN}You > {Colors.RESET}").strip()
@@ -489,7 +495,7 @@ class ACPAgentHarness:
             {"role": "user", "content": task}
         ]
 
-        async with httpx.AsyncClient(base_url=self.api_base, timeout=120.0) as client:
+        async with httpx.AsyncClient(base_url=self.api_base, timeout=120.0, headers=AUTH_HEADERS) as client:
             resp = await client.post("/v1/chat/completions", json={
                 "model": self.model,
                 "messages": self.history
@@ -516,7 +522,7 @@ Examples:
     )
     parser.add_argument("command", choices=["test", "mock", "chat", "acp"], help="Action to execute")
     parser.add_argument("--api-base", default=DEFAULT_API_BASE, help=f"API Base URL (default: {DEFAULT_API_BASE})")
-    parser.add_argument("--ws-url", default=DEFAULT_WS_URL, help=f"WebSocket Bridge URL (default: {DEFAULT_WS_URL})")
+    parser.add_argument("--ws-url", default=DEFAULT_WS_URL, help="WebSocket Bridge URL (default: ws://127.0.0.1:8000/ws?token=<key from api.txt>)")
     parser.add_argument("--model", default="gemini-pro", help="Model name (gemini-pro, gpt-4o, claude-3-5-sonnet)")
 
     args = parser.parse_args()

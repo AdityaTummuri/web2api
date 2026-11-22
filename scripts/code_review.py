@@ -12,8 +12,11 @@ import time
 from typing import Optional
 from openai import OpenAI
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from web2api_keys import default_key  # noqa: E402
+
 DEFAULT_BASE_URL = os.getenv("WEB2API_BASE", "http://127.0.0.1:8000/v1")
-DEFAULT_API_KEY = os.getenv("WEB2API_API_KEY", "sk-w2a-research-8e2b5c19fa7048361092a4f6de8a3b57")
+DEFAULT_API_KEY = default_key() or "no-key-configured"
 
 REVIEW_SYSTEM_PROMPT = """You are a Principal Software Architect and Staff Security Engineer conducting a rigorous, professional code review.
 Analyze the provided code thoroughly. Do not give shallow praise. Be precise, objective, and actionable.

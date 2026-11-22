@@ -6,9 +6,12 @@ Can be run locally or deployed independently on any remote server / container.
 """
 
 import asyncio
+import hmac
+import ipaddress
 import json
 import os
 import re
+import sys
 import time
 import uuid
 from datetime import datetime
@@ -21,11 +24,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from tool_parser import format_conversation_with_tools, parse_tool_calls
+from web2api_keys import keys_file_path, load_keys
 
 # Configuration
-HOST = os.getenv("HOST", "0.0.0.0")
+# Loopback by default: exposing the bridge on a network is an explicit opt-in
+# (e.g. HOST=0.0.0.0, or HOST=<tailscale-ip> to listen on the tailnet only).
+HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8000"))
-API_KEY = os.getenv("WEB2API_API_KEY") or os.getenv("API_KEY")
 CORS_ORIGINS_RAW = os.getenv("CORS_ORIGINS", "*")
 CORS_ORIGINS = [orig.strip() for orig in CORS_ORIGINS_RAW.split(",") if orig.strip()] or ["*"]
 
@@ -48,57 +53,65 @@ app.add_middleware(
 
 
 def get_allowed_api_keys() -> set:
-    """Returns set of allowed API keys from environment and api.txt."""
-    keys = set()
-    if API_KEY:
-        keys.add(API_KEY)
-    api_txt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api.txt")
-    if os.path.exists(api_txt_path):
-        try:
-            with open(api_txt_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    match = re.search(r"\b(sk-w2a-[A-Za-z0-9_-]+)\b", line)
-                    if match:
-                        keys.add(match.group(1))
-        except Exception:
-            pass
-    return keys
+    """Returns the set of accepted API keys (WEB2API_API_KEY env var + api.txt)."""
+    return set(load_keys())
+
+
+def auth_required() -> bool:
+    """Auth is enforced whenever any key is configured (or WEB2API_REQUIRE_AUTH is set)."""
+    if get_allowed_api_keys():
+        return True
+    return os.getenv("WEB2API_REQUIRE_AUTH", "").lower() in ("1", "true", "yes")
+
+
+def is_valid_key(provided: Optional[str]) -> bool:
+    if not provided:
+        return False
+    return any(hmac.compare_digest(provided.encode(), k.encode()) for k in get_allowed_api_keys())
 
 
 async def verify_api_key(request: Request):
     """
-    API Key verification. Checks environment variables and api.txt.
+    API Key verification. Checks the WEB2API_API_KEY env var and api.txt.
     Accepts 'Authorization: Bearer <key>' or 'X-API-Key: <key>'.
+    Once any key is configured, every request must carry a valid key.
     """
-    allowed_keys = get_allowed_api_keys()
-    require_auth = bool(API_KEY or os.getenv("WEB2API_REQUIRE_AUTH", "").lower() in ("1", "true", "yes"))
-
-    # 1. Extract provided token or X-API-Key
     auth_header = request.headers.get("authorization", "")
-    token = None
-    if auth_header.lower().startswith("bearer "):
-        token = auth_header[7:].strip()
+    token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else None
+    provided_key = token or request.headers.get("x-api-key")
 
-    header_key = request.headers.get("x-api-key")
-    provided_key = token or header_key
-
-    # 2. If a key was provided, validate it against allowed keys
-    if provided_key:
-        if allowed_keys and provided_key not in allowed_keys:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unauthorized: Invalid API key.",
-            )
+    if not auth_required():
         return True
 
-    # 3. If no key was provided, reject only if authentication is required
-    if require_auth:
+    if not is_valid_key(provided_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized: Invalid or missing API key. Provide 'Authorization: Bearer <KEY>' or 'X-API-Key: <KEY>'.",
         )
-
     return True
+
+
+def is_loopback_host(host: str) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def check_startup_security(host: str) -> Optional[str]:
+    """Returns an error message if it is unsafe to start on ``host``, else None."""
+    if is_loopback_host(host) or auth_required():
+        return None
+    if os.getenv("WEB2API_ALLOW_INSECURE", "").lower() in ("1", "true", "yes"):
+        return None
+    return (
+        f"Refusing to listen on {host} without an API key: anyone on that network could use "
+        f"your logged-in chat accounts.\n"
+        f"  Fix: run 'python3 web2api_keys.py generate' (writes {keys_file_path()}),\n"
+        f"       or set WEB2API_API_KEY, or bind to 127.0.0.1 and use an SSH tunnel."
+    )
 
 
 # OpenAI-compatible & FastAPI error formatting
@@ -240,9 +253,10 @@ hub = ExtensionBridgeHub()
 @app.websocket("/ws")
 @app.websocket("/ws/extension")
 async def websocket_bridge(websocket: WebSocket):
-    # If API_KEY is set, check optional token in query param
+    # Any web page can open a WebSocket to 127.0.0.1, so once keys exist the
+    # extension must prove itself with ?token=<key> before it may receive prompts.
     token = websocket.query_params.get("token") or websocket.query_params.get("key")
-    if API_KEY and token != API_KEY:
+    if auth_required() and not is_valid_key(token):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -313,7 +327,7 @@ async def get_status():
         "extension_connected": hub.is_connected,
         "active_client": hub.stats.get("client_info"),
         "stats": hub.stats,
-        "auth_required": bool(API_KEY),
+        "auth_required": auth_required(),
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -706,10 +720,15 @@ async def reset_conversation(raw_request: Request):
 
 
 if __name__ == "__main__":
+    problem = check_startup_security(HOST)
+    if problem:
+        print(f"[ERROR] {problem}", file=sys.stderr)
+        sys.exit(1)
     print(f"[INFO] Launching Web2API Universal Bridge Server on http://{HOST}:{PORT}")
     print(f"[INFO] WebSocket endpoints: ws://{HOST}:{PORT}/ws, ws://{HOST}:{PORT}/ws/extension")
-    if API_KEY:
-        print("[INFO] Security: API Key authentication ENABLED.")
+    if auth_required():
+        print(f"[INFO] Security: API key authentication ENABLED ({len(get_allowed_api_keys())} key(s)).")
+        print("[INFO] Extension bridge URL must include ?token=<key>  (see api.txt)")
     else:
-        print("[INFO] Security: Open access (no API key set).")
+        print("[INFO] Security: no API key configured - loopback-only open access.")
     uvicorn.run("bridge_server:app", host=HOST, port=PORT, reload=False)

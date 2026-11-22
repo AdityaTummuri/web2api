@@ -97,6 +97,9 @@ you're probably on regular Firefox: use route A or B.
    The signed file lands in `extension/dist/signed/`.
 3. Copy the `.xpi` to the phone. In Firefox go to *Settings → About Firefox* and tap the logo
    5 times to enable the debug menu. Then use *Settings → Install extension from file*.
+   If the `.xpi` is **greyed out** in the file picker (common on Android), install it from a link
+   instead: in Termux `cd ~/web2api/extension && python -m http.server 8002 --bind 127.0.0.1`, then
+   open `http://127.0.0.1:8002/<file>.xpi` in Firefox and tap **Add**.
 
 **B. Firefox Nightly (no signing)**: open `about:config`, set `xpinstall.signatures.required` to
 `false`, then install the unsigned `extension/web2api-firefox.xpi` from *Install extension from file*.
@@ -109,10 +112,12 @@ cd extension && npm run build && npm run run:android -- --android-device=<adb de
 ### Pair the extension with the server
 
 1. In Firefox, open the menu → *Extensions* → **Web2API** to open the popup.
-2. Get the bridge URL without typing the long key: in Termux run
-   `bash scripts/android/show-bridge-url.sh`, open **http://127.0.0.1:8001** in Firefox and tap **Copy**.
-   (The page is reachable only from the phone and closes after 5 minutes.)
-   Paste it into the popup's Bridge URL box (`ws://127.0.0.1:8000/ws?token=sk-w2a-dev-…`) and tap **Connect**.
+2. **Pair with a 6-digit code** (no long key to copy): in Termux run
+   `python web2api_keys.py pair` (inside `~/web2api`). Type the 6-digit code into the popup's
+   **Bridge URL** box and tap **Connect**. The code works once, only from the phone itself, and
+   expires after 10 minutes.
+   *(Alternatives: paste a full `ws://127.0.0.1:8000/ws?token=<key>` URL, or run
+   `bash scripts/android/show-bridge-url.sh` and open http://127.0.0.1:8001 to copy it.)*
 3. In the same Firefox, log in to the chat site you want to use (ChatGPT, Gemini or Claude) and
    **leave that tab open**.
 

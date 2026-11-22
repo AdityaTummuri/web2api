@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from tool_parser import format_conversation_with_tools, parse_tool_calls
-from web2api_keys import keys_file_path, load_keys
+from web2api_keys import keys_file_path, load_keys, redeem_pairing_code
 
 # Configuration
 # Loopback by default: exposing the bridge on a network is an explicit opt-in.
@@ -340,6 +340,35 @@ class Web2ApiRequest(BaseModel):
 
 
 # REST Endpoints
+class PairRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6, description="6-digit code from 'web2api_keys.py pair'")
+
+
+@app.post("/pair")
+async def pair_extension(body: PairRequest, raw_request: Request):
+    """
+    Lets the browser extension on THIS device swap a one-time 6-digit code for its
+    bridge URL, so nobody has to copy a long key on a phone keyboard.
+    Loopback only: remote clients can never redeem codes.
+    """
+    client_host = raw_request.client.host if raw_request.client else ""
+    if not is_loopback_host(client_host):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Pairing is only allowed from this device.")
+    result = redeem_pairing_code(body.code)
+    if result != "ok":
+        detail = {
+            "invalid": "Wrong pairing code.",
+            "expired": "Pairing code expired or used up. Create a new one: python3 web2api_keys.py pair",
+            "none": "No pairing code active. Create one: python3 web2api_keys.py pair",
+        }[result]
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+    key = next(iter(load_keys()), None)
+    if not key:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Server has no API keys configured.")
+    port = raw_request.url.port or PORT
+    return {"bridge_url": f"ws://127.0.0.1:{port}/ws?token={key}"}
+
+
 @app.get("/health")
 @app.get("/status")
 async def get_status():

@@ -130,3 +130,34 @@ def test_tokens_are_redacted_from_logs():
     RedactTokensFilter().filter(rec)
     assert "secret" not in rec.getMessage()
     assert "token=***" in rec.getMessage()
+
+
+def _local_client():
+    return TestClient(app, client=("127.0.0.1", 50000))
+
+
+def test_pairing_code_returns_bridge_url_once(keyed):
+    code = web2api_keys.create_pairing_code()
+    res = _local_client().post("/pair", json={"code": code})
+    assert res.status_code == 200
+    assert res.json()["bridge_url"].endswith(f"token={keyed[0]}")
+    assert _local_client().post("/pair", json={"code": code}).status_code == 403  # one-time
+
+
+def test_pairing_rejects_remote_clients(keyed):
+    code = web2api_keys.create_pairing_code()
+    remote = TestClient(app, client=("100.64.1.2", 50000))
+    assert remote.post("/pair", json={"code": code}).status_code == 403
+    assert _local_client().post("/pair", json={"code": code}).status_code == 200  # still valid locally
+
+
+def test_pairing_code_burns_after_too_many_wrong_guesses(keyed):
+    code = web2api_keys.create_pairing_code()
+    wrong = "000000" if code != "000000" else "111111"
+    for _ in range(web2api_keys.PAIRING_MAX_ATTEMPTS):
+        assert _local_client().post("/pair", json={"code": wrong}).status_code == 403
+    assert _local_client().post("/pair", json={"code": code}).status_code == 403
+
+
+def test_pairing_without_active_code(keyed):
+    assert _local_client().post("/pair", json={"code": "123456"}).status_code == 403

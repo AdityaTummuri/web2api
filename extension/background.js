@@ -408,6 +408,41 @@ ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (action === "PAIR_WITH_CODE") {
+    (async () => {
+      // Swap a 6-digit code (from `web2api_keys.py pair` on this device) for the bridge URL + key.
+      const ports = [8000, 8787];
+      try {
+        const cur = new URL((await getTargetBridgeUrl()).replace(/^ws/, "http"));
+        if (cur.port && !ports.includes(Number(cur.port))) ports.unshift(Number(cur.port));
+      } catch (e) {}
+      let lastError = "Bridge server not reachable on this device.";
+      for (const port of ports) {
+        try {
+          const res = await fetch(`http://127.0.0.1:${port}/pair`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: request.code })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.bridge_url) {
+            await ext.storage.local.set({ customBridgeUrl: data.bridge_url });
+            if (ws) ws.close();
+            connectBridge();
+            sendResponse({ success: true });
+            return;
+          }
+          lastError = (data.error && data.error.message) || data.detail || `Pairing failed (HTTP ${res.status}).`;
+          if (res.status !== 404) break;
+        } catch (e) {
+          // try next port
+        }
+      }
+      sendResponse({ success: false, error: lastError });
+    })();
+    return true;
+  }
+
   if (action === "RECONNECT_BRIDGE") {
     if (ws) ws.close();
     connectBridge();

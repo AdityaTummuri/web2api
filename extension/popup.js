@@ -115,6 +115,20 @@ openClaudeBtn.addEventListener("click", () => {
 
 reconnectBridgeBtn.addEventListener("click", async () => {
   const url = bridgeUrlInput.value.trim();
+  if (/^\d{6}$/.test(url)) {
+    // 6 digits = pairing code from `python3 web2api_keys.py pair` on the bridge device.
+    reconnectBridgeBtn.disabled = true;
+    reconnectBridgeBtn.textContent = "...";
+    const res = await ext.runtime.sendMessage({ action: "PAIR_WITH_CODE", code: url });
+    reconnectBridgeBtn.disabled = false;
+    reconnectBridgeBtn.textContent = "Connect";
+    bridgeUrlInput.value = "";
+    outputView.textContent = res && res.success
+      ? "Paired! The extension now connects to the bridge with its key."
+      : `Pairing failed: ${(res && res.error) || "unknown error"}`;
+    setTimeout(refreshStatus, 1000);
+    return;
+  }
   if (url) {
     reconnectBridgeBtn.disabled = true;
     reconnectBridgeBtn.textContent = "...";
